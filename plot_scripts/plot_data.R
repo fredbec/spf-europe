@@ -42,7 +42,7 @@ plot_num_responses <- ggplot(allqs, aes(x = diffin_factor, y = forecast_origin))
         plot.title = element_text(hjust = 0.5))
 
 
-pdf(here("QueriedQuarters.pdf"), width = 8, height = 12)
+pdf(here("plot_results", "QueriedQuarters.pdf"), width = 8, height = 12)
 plot_present /
   plot_spacer() /
   plot_num_responses +
