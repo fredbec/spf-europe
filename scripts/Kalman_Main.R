@@ -1,4 +1,4 @@
-### Kalman Main
+### Kalman Main - to test Kalman filter and smoother
 library(here)
 
 rm(list = ls())
@@ -16,7 +16,7 @@ start <- 0.5
 smooth <- FALSE
 approx_error <- 0.01
 
-test <- kalman_filter(y)
+test <- kalman_filter(y,start,approx_error)
 
 
 
