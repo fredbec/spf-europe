@@ -2,3 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
+
+#ECB data 
+data/quarterly

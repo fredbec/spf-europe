@@ -39,7 +39,7 @@ for(release in seq(start_release_num, end_release_num, 0.25)){
   origin_yr <- substr(origin_name, 1, 4) |> as.numeric()
   origin_qrtr <- substr(origin_name, 6, 6) |> as.numeric()
 
-  spf_curr <- data.table::fread(here("spf_data", paste0(origin_name, ".csv")),
+  spf_curr <- data.table::fread(here("data", "spf_raw_data", paste0(origin_name, ".csv")),
                                skip = 1,
                                header = TRUE)
 
@@ -78,4 +78,4 @@ allqs <- rbindlist(allqs) |>
   DT(, diffin := target_point - forecast_origin)
 
 
-data.table::fwrite(allqs, here("data", "availableQsbyhor.csv"))
+data.table::fwrite(allqs, here("data", "spf_availability_quartersbyhor.csv"))

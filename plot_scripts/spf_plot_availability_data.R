@@ -8,7 +8,7 @@ library(patchwork)
 DT <- `[`
 
 
-allqs <- data.table::fread(here("data", "availableQsbyhor.csv")) |>
+allqs <- data.table::fread(here("data", "spf_availability_quartersbyhor.csv")) |>
   DT(, diffin_factor := paste0(diffin * 4) |>
        factor(levels = c("2", "6", "18", "19"))) |>
   DT(, forecast_origin_quarter := paste0(forecast_year, "Q", forecast_quarter)) |>
@@ -42,7 +42,7 @@ plot_num_responses <- ggplot(allqs, aes(x = diffin_factor, y = forecast_origin))
         plot.title = element_text(hjust = 0.5))
 
 
-pdf(here("plot_results", "QueriedQuarters.pdf"), width = 8, height = 12)
+pdf(here("plot_results", "spf_availability_queried_quarters.pdf"), width = 8, height = 12)
 plot_present /
   plot_spacer() /
   plot_num_responses +
