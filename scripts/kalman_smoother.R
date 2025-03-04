@@ -58,7 +58,7 @@ kalman_smoother = function(states_filtered) {
   # Kalman smoother
   for (t in TT:1) {
 
-    # Extract relevant objects at time t|T
+    # Extract relevant objects at time t
     ind_nan <- ind_nan_mat[,t]
     Lt_aux <- Lt[, ,t]                                  # (A8)
     v_t_aux <- v_t[,t]

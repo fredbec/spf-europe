@@ -173,8 +173,9 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
 #'
 #' @export
 log_likelihood_function <- function(rw_sd, y, approx_err) {
+
   # Run the Kalman filter to get the negative log-likelihood
-  result <- kalman_filter(y, rw_sd, approx_err, smooth = FALSE)  # Run the Kalman filter
-  return(result$NegLL)  # Return the negative log-likelihood value
+  result <- kalman_filter(y, rw_sd, approx_err, smooth = FALSE)
+  return(result$NegLL)
 }
 
