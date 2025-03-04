@@ -1,37 +1,67 @@
-### Text
-
-
-
-kalman_filter = function(y, start_val, approx_error, smooth = FALSE) {
+#' Kalman Filter for Quarterly SPF Forecasts
+#'
+#' Computes the Kalman filter-based negative log-likelihood for a
+#' given random walk variance in a state-space model.
+#'
+#' @param y A Tx2 matrix of annualized SPF projections (column 1)
+#'   and observed quarterly growth rates (column 2).
+#' @param rw_sd Standard deviation of the random walk process.
+#' @param approx_err Standard deviation of the approximation error.
+#' @param smooth Logical; if TRUE, outputs smoother variables.
+#'
+#' @return A list containing:
+#'   \item{NegLL}{Negative log-likelihood}
+#'   \item{x_fc}{Filtered state estimates (if smooth = TRUE)}
+#'   \item{x_fc_var}{Filtered state variances (if smooth = TRUE)}
+#'   \item{Lt}{Auxiliary variable (if smooth = TRUE)}
+#'   \item{v_t}{Prediction residual (if smooth = TRUE)}
+#'   \item{y_var_fc}{Covariance for predicting y_t (if smooth = TRUE)}
+#'   \item{nan_ind}{Indicator for informative states (if smooth = TRUE)}
+#'
+#' @examples
+#' q <- rbind(-1.975905496,-0.5638928,2.660615959,2.566018083,2.244165169,2.060216621,
+#'            4.861686218,3.396030031,1.409498959,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,
+#'            NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN)
+#' a <- rbind(NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,2.338002864,NaN,NaN,NaN,
+#'            1.65436809,NaN,NaN,NaN,2.055519891,NaN,NaN,NaN,1.915861112,NaN,NaN,NaN,
+#'            1.912181401,NaN,NaN,NaN,1.885626914,NaN,NaN,NaN,1.833479425)
+#' y <- cbind(a,q)
+#' result <- kalman_filter(y, rw_sd = 0.5, approx_err = 0.01, smooth = TRUE)
+#'
+#' @export
+kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
 
   ###### State space representation
 
   ### Measurement and transition equation
-  A <- rbind(c(1,0,0,0,0,0,0),
-            c(1,0,0,0,0,0,0),
-            c(0,1,0,0,0,0,0),
-            c(0,0,1,0,0,0,0),
-            c(0,0,0,1,0,0,0),
-            c(0,0,0,0,1,0,0),
-            c(0,0,0,0,0,1,0))
+  A <- matrix(c(
+    1,0,0,0,0,0,0,
+    1,0,0,0,0,0,0,
+    0,1,0,0,0,0,0,
+    0,0,1,0,0,0,0,
+    0,0,0,1,0,0,0,
+    0,0,0,0,1,0,0,
+    0,0,0,0,0,1,0 ), nrow = 7, byrow = TRUE)
 
-  B <- rbind(c(start_val,0,0,0,0,0,0),
-            c(0,0,0,0,0,0,0),
-            c(0,0,0,0,0,0,0),
-            c(0,0,0,0,0,0,0),
-            c(0,0,0,0,0,0,0),
-            c(0,0,0,0,0,0,0),
-            c(0,0,0,0,0,0,0))
+  B <- matrix(0, 7, 7)
+  B[1, 1] <- rw_sd
 
-  C <- rbind(c(1/16,2/16,3/16,4/16,3/16,2/16,1/16),
-            c(1,0,0,0,0,0,0))
+  C <- matrix(c(
+    1/16, 2/16, 3/16, 4/16, 3/16, 2/16, 1/16,
+    1,    0,    0,    0,    0,    0,    0    ), nrow = 2, byrow = TRUE)
 
-  D <- rbind(c(approx_error,0),
-            c(0,0))
-
+  D <- diag(c(approx_err, 0))
 
   # Output required for Kalman smoother (smooth = 1)
   TT <- nrow(y)
+  if (smooth == TRUE) {
+    x_fc <- matrix(data=NA,nrow=TT,ncol=7)
+    x_fc_var <- array(rep(NA, 7*7*TT), dim=c(7, 7, TT))
+    Lt <- array(rep(NA, 7*7*TT), dim=c(7, 7, TT))
+    v_t_out <- matrix(data=NA,nrow=2,ncol=TT)
+    y_var_fc_out <- array(rep(NA, 2*2*TT), dim=c(2, 2, TT))
+    ind_nan_out <- matrix(data=NA,nrow=2,ncol=TT)
+  }
 
 
   #### Kalman filter recursion and log-likelihood contributions
@@ -39,8 +69,8 @@ kalman_filter = function(y, start_val, approx_error, smooth = FALSE) {
   LL <- rep(0, TT)
 
   # Initialize Kalman filter recursion and matrix for filtered x
-  xmean = rep(0, 7);          # Mean of x0
-  xvar = diag(7)*1.0e7;       # Variance of x0 = 10000000
+  xmean <- rep(0, 7);          # Mean of x0
+  xvar <- diag(7) * 1.0e7;     # Variance of x0 = 10000000
 
   # Kalman filter
   for (t in 1:TT) {
@@ -49,8 +79,8 @@ kalman_filter = function(y, start_val, approx_error, smooth = FALSE) {
     yt = y[,t]
 
     # Prior mean and covariance of x_t
-    x_mean_fc <- A %*% xmean                            # (A1)
-    x_var_fc = A %*% xvar %*% t(A) + B %*% t(B)         # (A2)
+    x_mean_fc <- A %*% xmean                             # (A1)
+    x_var_fc = A %*% xvar %*% t(A) + B %*% t(B)          # (A2)
 
     # Prediction and prediction error of y_t|t-1
     y_mean_fc <- C %*% x_mean_fc
@@ -58,29 +88,29 @@ kalman_filter = function(y, start_val, approx_error, smooth = FALSE) {
 
     # Forecasting covariance and variance for predicting y_t
     y_cov_fc <- x_var_fc %*% t(C)
-    y_var_fc <- C %*% y_cov_fc + D %*% t(D)             # (A3)
+    y_var_fc <- C %*% y_cov_fc + D %*% t(D)              # (A3)
 
     # Adjust for NaN
     ind_nan <- !is.na(yt)
-    y_var_fc_adj <- y_var_fc[ind_nan, ind_nan]
-    y_cov_fc_adj <- y_cov_fc[, ind_nan]
-    v_t_adj <- v_t[ind_nan,]
+    y_var_fc_adj <- y_var_fc[ind_nan, ind_nan, drop = FALSE]
+    y_cov_fc_adj <- y_cov_fc[, ind_nan, drop = FALSE]
+    v_t_adj <- v_t[ind_nan, ,drop = FALSE]
 
 
-    if (sum(ind_nan)  > 0) {
+    if (any(ind_nan)) {  # same as (sum(ind_nan)  > 0)
 
       # Kalman gain at t
-      K <- y_cov_fc_adj %*% solve(y_var_fc_adj)         # (A4) = (A2)*C*inv(A3)
+      K <- y_cov_fc_adj %*% chol2inv(chol(y_var_fc_adj)) # (A4) = (A2)*C*inv(A3)
 
       # Posterior mean and covariance of x_t
-      xmean <- x_mean_fc + K %*% v_t_adj                # (A6)
-      xvar <- x_var_fc - K %*%t (y_cov_fc_adj)          # (A7)
+      xmean <- x_mean_fc + K %*% v_t_adj                 # (A6)
+      xvar <- x_var_fc - K %*%t (y_cov_fc_adj)           # (A7)
 
       # Log-likelihood contribution
       LL[t] = - 0.5 * ( sum(ind_nan)*log(2*pi) + log(det(matrix(y_var_fc_adj)))
-                        + t(v_t_adj) %*% solve(y_var_fc_adj) %*% v_t_adj)
+                        + t(v_t_adj) %*% chol2inv(chol(y_var_fc_adj)) %*% v_t_adj)
 
-    } else if (sum(ind_nan)  == 0) {
+    } else {
 
       # No information at time t, y = [NaN,NaN]
       xmean <- x_mean_fc
@@ -88,11 +118,35 @@ kalman_filter = function(y, start_val, approx_error, smooth = FALSE) {
 
     }
 
+    # Output for Kalman smoother
+    if (smooth == TRUE) {
+      x_fc[t,] <- t(x_mean_fc)
+      x_fc_var[, ,t] <- x_var_fc
+      v_t_out[,t] <- v_t
+      y_var_fc_out[, ,t] <- y_var_fc
+
+      # Kalman gain
+      K_aux <- matrix(data=0,nrow=7,ncol=2)
+      K_aux[,ind_nan] <- K;
+      ind_nan_out[,t] <- ind_nan
+
+      # Auxiliary variable
+      Lt[, ,t] <- A - A %*% K_aux %*% C
+    }
+
   }
 
   # Negative Log-Likelihood
   LogL = -sum(LL)
-  retlist <- list(LL = LogL)
+
+  # Set up output
+  if (smooth == TRUE) {
+    retlist <- list(NegLL = LogL, x_fc = x_fc, x_fc_var = x_fc_var, v_t = v_t_out,
+                    y_var_fc = y_var_fc_out, ind_nan = ind_nan_out, Lt = Lt)
+  } else {
+    retlist <- list(NegLL = LogL)
+  }
+
 
   #mything <- retlist$LL
   return(retlist)
