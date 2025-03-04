@@ -147,9 +147,34 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
     retlist <- list(NegLL = LogL)
   }
 
-
-  #mything <- retlist$LL
   return(retlist)
 }
 
 # https://acp.copernicus.org/articles/14/9707/2014/acp-14-9707-2014.pdf
+
+
+
+#' Log-Likelihood Function for Kalman Filter (for rw_sd optimization)
+#'
+#' This helper function computes the negative log-likelihood (NegLL)
+#' for a given value of the random walk standard deviation (rw_sd),
+#' using the `kalman_filter` function. It is intended for use in optimization
+#' procedures to estimate `rw_sd`.
+#'
+#' @param rw_sd The random walk standard deviation (rw_sd) to optimize.
+#' @param y A Tx2 matrix of annualized SPF projections (column 1)
+#'   and observed quarterly growth rates (column 2).
+#' @param approx_err The fixed standard deviation of the approximation error.
+#'
+#' @return The negative log-likelihood value (NegLL) for the given `rw_sd`.
+#'
+#' @examples
+#' log_likelihood_function(rw_sd = 0.5, y = y, approx_err = 0.01)
+#'
+#' @export
+log_likelihood_function <- function(rw_sd, y, approx_err) {
+  # Run the Kalman filter to get the negative log-likelihood
+  result <- kalman_filter(y, rw_sd, approx_err, smooth = FALSE)  # Run the Kalman filter
+  return(result$NegLL)  # Return the negative log-likelihood value
+}
+
