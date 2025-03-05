@@ -60,7 +60,7 @@ kalman_smoother = function(states_filtered) {
 
     # Extract relevant objects at time t
     ind_nan <- ind_nan_mat[,t]
-    Lt_aux <- Lt[, ,t]                                  # (A8)
+    Lt_aux <- Lt[, ,t]                                    # (A8)
     v_t_aux <- v_t[,t]
     y_fc_var_aux <- y_fc_var[, ,t]
     x_fc_aux <- x_fc[t,]
