@@ -10,6 +10,15 @@ start_release <- "1999Q1"
 end_release <- "2024Q4"
 
 
+##data with concrete release dates
+reldates <- read.delim(here("data", "spf_release_dates.txt"), sep = " ") |>
+  as.data.table() |>
+  setnames("Date", "reldate") |>
+  setnames("Deadline", "release_deadline") |>
+  setnames("Publication", "release_publication") |>
+  DT(, .SD, .SDcols = c("reldate", "release_deadline", "release_publication"))
+
+
 #compute year and quarter
 #and "mix": e.g. 2015.25 will be first quarter in 2025
 #"mix", since it's easier to work with pure numeric
@@ -75,6 +84,14 @@ for(release in seq(start_release_num, end_release_num, 0.25)){
 
 }
 #concatenate all data.tables and compute
-alldata <- rbindlist(alldata)
+alldata <- rbindlist(alldata) |>
+  DT(,reldate := paste0(forecast_year, "Q", forecast_quarter))
+
+#merge data with release dates
+alldata <- reldates[alldata, on = "reldate"] |>
+  DT(, .SD, .SDcols = c("forecaster_id", "forecast_year", "forecast_quarter",
+                        "target_id", "target_year", "target_quarter",
+                        "type_target", "type_format",
+                        "release_deadline", "release_publication", "prediction"))
 
 data.table::fwrite(alldata, here("data", "spf_consolidated.csv"))
