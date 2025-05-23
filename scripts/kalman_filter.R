@@ -52,7 +52,7 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
 
   D <- diag(c(approx_err, 0))
 
-  # Output required for Kalman smoother (smooth = 1)
+  # Output required for Kalman smoother (smooth = TRUE)
   TT <- nrow(y)
   if (smooth == TRUE) {
     x_fc <- matrix(data=NA,nrow=TT,ncol=7)
