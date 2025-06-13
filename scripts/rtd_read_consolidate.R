@@ -1,5 +1,6 @@
 library(here)
 library(data.table)
+library(lubridate)
 
 #chain operator for data.table
 DT <- `[`
@@ -58,6 +59,21 @@ for(yrnum in start_yr:end_yr){
 
 rtd_dat <- rbindlist(reslist)
 
-data.table::fwrite(rtd_dat, here("data", "rtd_consolidated.csv"))
+data.table::fwrite(rtd_dat, here("data", "revdatpre14.csv"))
 
 
+
+### real-time vintages starting from 2014, downloaded from
+## https://ec.europa.eu/eurostat/databrowser/view/ei_na_q_vtg__custom_16834433/default/table?lang=en
+revdatpost14 <- fread(here("data", "estat_ei_na_q_vtg_filtered_en.csv")) |>
+  DT(, .SD, .SDcols = c("revdate", "TIME_PERIOD", "OBS_VALUE")) |>
+  DT(, target_year := as.numeric(substr(TIME_PERIOD, 1, 4))) |>
+  DT(, target_quarter := as.numeric(substr(TIME_PERIOD, 7,7))) |>
+  setnames("OBS_VALUE", "rgdp") |>
+  DT(, origin_year := lubridate::year(revdate)) |>
+  DT(, origin_month := lubridate::month(revdate)) |>
+  DT(, origin_day := lubridate::day(revdate)) |>
+  DT(, .SD, .SDcols = c("rgdp", "target_year", "target_quarter", "origin_year", "origin_month", "origin_day"))
+
+
+data.table::fwrite(revdatpost14, here("data", "revdatpost14.csv"))
