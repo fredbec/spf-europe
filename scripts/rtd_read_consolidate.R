@@ -46,7 +46,7 @@ for(yrnum in start_yr:end_yr){
       DT(3:.N,) |>
       setnames("Name.", "target") |>
       setnames(c_varname, "rgdp") |>
-      DT(, target_quarter := substr(target, 1,2)) |>
+      DT(, target_quarter := substr(target, 2,2)) |>
       DT(, target_year := substr(target, 4, 8)) |>
       DT(, target := NULL) |>
       DT(, origin_year := yrnum) |>
