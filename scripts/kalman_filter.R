@@ -179,3 +179,64 @@ log_likelihood_function <- function(rw_sd, y, approx_err) {
   return(result$NegLL)
 }
 
+
+
+#' SPF Filter to Estimate Implied Forecasts Using Kalman Smoothing
+#'
+#' This function applies a Kalman filter and smoother to quarterly real GDP
+#' growth rates and SPF (Survey of Professional Forecasters) projections to
+#' estimate the implied latent forecast path. It handles missing data by masking
+#' SPF projections prior to the first observed real GDP data point, and estimates
+#' the random walk variance using maximum likelihood.
+#'
+#' @param rgdp A numeric vector of observed quarterly real GDP growth rates.
+#' @param spf A numeric vector of SPF projections, annualized.
+#'
+#' @return A matrix with one column named \code{"SPF_implied"}, representing the
+#' smoothed latent forecast series from the state-space model.
+#'
+#' @details Internally, this function:
+#' \itemize{
+#'   \item Combines \code{rgdp} and \code{spf} into a 2-column matrix.
+#'   \item Masks SPF projections prior to the first observed \code{rgdp} value.
+#'   \item Optimizes the standard deviation of the random walk process (\code{rw_sd})
+#'         using maximum likelihood via the \code{log_likelihood_function}.
+#'   \item Applies the Kalman filter and smoother using the estimated \code{rw_sd}.
+#' }
+#'
+#' @seealso \code{\link{kalman_filter}}, \code{\link{log_likelihood_function}}
+#'
+#' @examples
+#' # Example usage with synthetic data:
+#' SPF <- SPF_filter(rgdp = y[,2], spf = y[,1])
+#'
+#' @export
+SPF_filter <- function(rgdp,spf) {
+
+  # Prepare input for Kalman filter and smoother
+  y <- cbind(spf,rgdp)
+
+  # SPF forecasts prior to latest GDP release is not considered by the filter
+  nan_idx <- which(is.nan(rgdp))
+  first_nan_pos <- if (length(nan_idx) > 0) min(nan_idx) else NA
+  y[1:(first_nan_pos-1),1] <- NaN
+
+  # Estimate the random walk error standard deviation
+  start <- 0.5
+  est_sd <- optim(par = start,
+                  fn = log_likelihood_function,
+                  y = y,
+                  approx_err = 0.01,
+                  method = "L-BFGS-B",
+                  lower = 0.0001,
+                  upper = Inf)
+
+  # Given the estimate 'est_sd', filter and smooth states, i.e., implied SPF
+  filtered_states <- kalman_filter(y, rw_sd = est_sd$par, approx_err = 0.01, smooth = TRUE)
+  SPF <- as.matrix(kalman_smoother(filtered_states)[,1])
+  colnames(SPF) <- "SPF_implied"
+
+  return(SPF)
+
+}
+
