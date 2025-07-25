@@ -1,7 +1,7 @@
 library(here)
 library(data.table)
 
-source(here("functions_kalman.R"))
+source(here("scripts", "filter_spf_functions.R"))
 #chain operator for data.table
 DT <- `[`
 
@@ -54,3 +54,6 @@ for(i in 1:nrow(combs)){
                                     rtd_issue = "latest_vintage")
 }
 
+res_spf_filter <- rbindlist(res_spf_filter)
+
+data.table::fwrite(res_spf_filter, here("data", "filter_spf_data.csv"))

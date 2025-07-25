@@ -1,3 +1,6 @@
+source(here("scripts", "kalman_filter.R"))
+source(here("scripts", "kalman_smoother.R"))
+
 get_rtd <- function(real_time_data,
                     current_issue,
                     rtd_issue = c("latest_vintage", "rtd"),
