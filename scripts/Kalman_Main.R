@@ -1,12 +1,105 @@
 ### Kalman Main - to test Kalman filter and smoother
 
 
-# This Code is a mess and just to play around!!!!!!!!!!!!!!
+# This code is a mess and just to play around!!!!!!!!!!!!!!
 library(here)
+library(dplyr)
+library(lubridate)
+library(zoo)
 
 rm(list = ls())
 cat("\014")
 
+
+# Read in filtered quarterly SPF forecasts
+spf_data <- read.csv("data/filter_spf_data.csv")
+
+# Read in real-time GDP
+rgdp_pre <- read.csv("data/revdatpre14.csv")
+rgdp_post <- read.csv("data/revdatpost14.csv")
+
+
+# Compute annualized quarterly GDP growth rates
+rgdp_pre <- rgdp_pre %>%
+  arrange(origin_year, origin_month, target_year, target_quarter) %>%  # ensure correct order
+  group_by(origin_year, origin_month) %>%
+  mutate(
+    gdp_growth = ( (rgdp / lag(rgdp) ) ^ 4 - 1) * 100,
+  ) %>%
+  ungroup()
+
+
+# Keep second releases
+rgdp_pre <- rgdp_pre %>%
+  mutate(
+    # Convert to yearqtr (e.g., 2018 Q2 → 2018.25)
+    ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q"),
+
+    # Create origin_date from origin_year and origin_month
+    origin_date = make_date(origin_year, origin_month, 1)
+  )
+
+rgdp_second_release <- rgdp_pre %>%
+  arrange(ref_period, origin_date) %>%
+  group_by(ref_period) %>%
+  slice(2) %>%
+  ungroup()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Trash - Code
 
 source(here("scripts", "kalman_filter.R"))
 source(here("scripts", "kalman_smoother.R"))
