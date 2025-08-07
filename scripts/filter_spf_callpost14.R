@@ -13,7 +13,7 @@ rtd <- fread(here("data", "revdatpost14.csv")) |>
      by = c("origin_year", "origin_month", "target_year", "target_quarter")) |>
   DT(number == 1) |>
   setorder(origin_year, origin_month, origin_day, target_year, target_quarter) |>
-  DT(, rgdp_growth := (rgdp / shift(rgdp,1) - 1) * 100,
+  DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
      by = .(origin_year, origin_month, origin_day)) |>
   DT(, rgdp := NULL) |>
   DT(!is.na(rgdp_growth)) |>
@@ -22,7 +22,7 @@ rtd <- fread(here("data", "revdatpost14.csv")) |>
 
 rtd_pre14 <- fread(here("data", "revdatpre14.csv")) |>
   setorder(origin_year, origin_month, target_year, target_quarter) |>
-  DT(, rgdp_growth := (rgdp / shift(rgdp,1) - 1) * 100,
+  DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
      by = .(origin_year, origin_month)) |>
   DT(, rgdp := NULL) |>
   DT(!is.na(rgdp_growth)) |>
