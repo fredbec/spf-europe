@@ -72,7 +72,7 @@ spfdat <- fread(here("data", "spf_consolidated.csv")) |>
 
 #make a combination of all years and quarters, to loop over
 quarters <- 1:4
-years <- 2020:2024
+years <- 2001:2024
 combs <- CJ(year = years,
             quarter = quarters)
 
