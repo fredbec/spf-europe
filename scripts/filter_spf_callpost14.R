@@ -13,7 +13,7 @@ rtd <- fread(here("data", "revdatpost14.csv")) |>
      by = c("origin_year", "origin_month", "target_year", "target_quarter")) |>
   DT(number == 1) |>
   setorder(origin_year, origin_month, origin_day, target_year, target_quarter) |>
-  DT(, rgdp_growth := (rgdp / shift(rgdp,4) - 1) * 100,
+  DT(, rgdp_growth := (rgdp / shift(rgdp,1) - 1) * 100,
      by = .(origin_year, origin_month, origin_day)) |>
   DT(, rgdp := NULL) |>
   DT(!is.na(rgdp_growth)) |>
@@ -22,7 +22,7 @@ rtd <- fread(here("data", "revdatpost14.csv")) |>
 
 rtd_pre14 <- fread(here("data", "revdatpre14.csv")) |>
   setorder(origin_year, origin_month, target_year, target_quarter) |>
-  DT(, rgdp_growth := (rgdp / shift(rgdp,4) - 1) * 100,
+  DT(, rgdp_growth := (rgdp / shift(rgdp,1) - 1) * 100,
      by = .(origin_year, origin_month)) |>
   DT(, rgdp := NULL) |>
   DT(!is.na(rgdp_growth)) |>
@@ -42,7 +42,11 @@ rtd_full <- CJ(origin_month = 1:12,
 
 rtd_full <- merge(rtd_full, rtd, by = c("origin_year", "origin_month",
                                         "target_quarter", "target_year"), all.x = TRUE) |>
-  setorder(origin_year, origin_month)
+  setorder(origin_year, origin_month) |>
+  #kick out first observation (as growth rate is NA)
+  DT(, fill := (target_quarter == 1 & target_year == 1991)) |>
+  DT(fill == FALSE) |>
+  DT(, fill := NULL)
 
 #fill in missing values by carrying forward the last vintage
 rtd_full[, rgdp_growth := zoo::na.locf(rgdp_growth, na.rm = FALSE),
@@ -50,7 +54,8 @@ rtd_full[, rgdp_growth := zoo::na.locf(rgdp_growth, na.rm = FALSE),
 
 rtd <- rtd_full |>
   DT(target_year <= origin_year) |>
-  DT(, rgdp_growth := ifelse(is.na(rgdp_growth), NaN, rgdp_growth))
+  DT(, rgdp_growth := ifelse(is.na(rgdp_growth), NaN, rgdp_growth)) |>
+  setorder(origin_year, origin_month, target_year, target_quarter)
 
 #adhoc calculation of SPF ensemble forecasts
 #!!!!!!!!!!!!! might be wrong !!!!!!!!!!!!!!
@@ -60,7 +65,7 @@ spfdat <- fread(here("data", "spf_consolidated.csv")) |>
   DT(, horizon := target_year - forecast_year) |>
   DT(horizon <=1) |>
   DT(!is.na(prediction)) |>
-  DT(, ens_fc := mean(prediction), by = c("target_year",
+  DT(, ens_fc := median(prediction), by = c("target_year",
                                           "forecast_year",
                                           "forecast_quarter")) |>
   DT(, .SD, .SDcols = c("target_year",
@@ -93,4 +98,4 @@ for(i in 1:nrow(combs)){
 
 res_spf_filter <- rbindlist(res_spf_filter)
 
-data.table::fwrite(res_spf_filter, here("data", "filter_spf_data.csv"))
+data.table::fwrite(res_spf_filter, here("data", "filter_spf_data_medianfc.csv"))
