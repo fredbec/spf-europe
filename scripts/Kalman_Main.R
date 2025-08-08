@@ -489,6 +489,28 @@ print(comparison_table)
 
 
 
+################### Incorporating US-SPF in Kalman
+rm(list = ls())
+cat("\014")
+
+
+source(here("scripts", "kalman_filter_us.R"))
+source(here("scripts", "kalman_smoother_us.R"))
+
+
+rgdp <- rbind(-1.975905496,-0.5638928,2.660615959,2.566018083,2.244165169,2.060216621,
+              4.861686218,3.396030031,1.409498959,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,
+              NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN)
+spf <- rbind(NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,2.338002864,NaN,NaN,NaN,1.65436809,
+             NaN,NaN,NaN,2.055519891,NaN,NaN,NaN,1.915861112,NaN,NaN,NaN,1.912181401,NaN,NaN,
+             NaN,1.885626914,NaN,NaN,NaN,1.833479425)
+
+us_spf <- rgdp * 0.8
+us_spf[10:13] = c(0.9, 1.1, 1, 3)
+
+
+SPF_filtered <- SPF_filter_us(rgdp,spf,us_spf)
+
 
 
 
@@ -805,41 +827,6 @@ data$SPF3_rt[t] <- data_aux$SPF_implied[lag+4]
 
 # Update index
 T_all <- T_all - 1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
