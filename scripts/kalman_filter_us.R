@@ -1,4 +1,4 @@
-#' Kalman Filter for Quarterly SPF Forecasts
+#' Kalman Filter for Quarterly ECB SPF Forecasts incorporating Quarterly US SPF
 #'
 #' Computes the Kalman filter-based negative log-likelihood for a
 #' given random walk variance in a state-space model.

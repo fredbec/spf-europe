@@ -1,4 +1,4 @@
-#' Kalman Smoother for Quarterly SPF Forecasts
+#' Kalman Smoother for Quarterly ECB SPF Forecasts incorporating Quarterly US SPF
 #'
 #' This function applies the Kalman smoothing algorithm to a set of filtered
 #' state estimates obtained from from the `kalman_filter_us` function.
