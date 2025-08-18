@@ -495,7 +495,6 @@ cat("\014")
 
 
 source(here("scripts", "kalman_filter_us.R"))
-source(here("scripts", "kalman_smoother_us.R"))
 
 
 rgdp <- rbind(-1.975905496,-0.5638928,2.660615959,2.566018083,2.244165169,2.060216621,
@@ -506,19 +505,19 @@ spf <- rbind(NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,2.338002864,NaN,NaN,NaN
              NaN,1.885626914,NaN,NaN,NaN,1.833479425)
 
 us_spf <- rgdp * 0.8
-us_spf[10:13] = c(0.9, 1.1, 1, 3)
+#us_spf[10:13] = c(0.9, 1.1, 1, 3)
 
 
-SPF_filtered <- SPF_filter_us(rgdp,spf,us_spf)
+SPF_filtered_us <- SPF_filter_us(rgdp,spf,us_spf)
 
-
+source(here("scripts", "kalman_filter.R"))
+SPF_filtered <- SPF_filter(rgdp,spf)
 
 
 
 #### Trash - Code
 
 source(here("scripts", "kalman_filter.R"))
-source(here("scripts", "kalman_smoother.R"))
 
 q <- rbind(-1.975905496,-0.5638928,2.660615959,2.566018083,2.244165169,2.060216621,
            4.861686218,3.396030031,1.409498959,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,
