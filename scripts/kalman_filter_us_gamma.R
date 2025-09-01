@@ -8,6 +8,7 @@
 #'   SPF projections (column 3).
 #' @param rw_sd Standard deviation of the random walk process.
 #' @param rw_us_sd Standard deviation of the US SPF random walk process.
+#' @param gamma_par Gamma parameter in measurement equation for US SPF
 #' @param approx_err Standard deviation of the approximation error.
 #' @param smooth Logical; if TRUE, outputs smoother variables.
 #'
@@ -31,10 +32,10 @@
 #' us_spf[10:13] = c(0.9, 1.1, 1, 3)
 #'
 #' y <- cbind(spf,rgdp,us_spf)
-#' result <- kalman_filter_us(y, rw_sd = 0.5, rw_us_sd = 0.5, approx_err = 0.01, smooth = TRUE)
+#' result <- kalman_filter_us_gamma(y, rw_sd = 0.5, rw_us_sd = 0.5, gamma_par = 1, approx_err = 0.01, smooth = TRUE)
 #'
 #' @export
-kalman_filter_us = function(y, rw_sd, rw_us_sd, approx_err, smooth = FALSE) {
+kalman_filter_us_gamma = function(y, rw_sd, rw_us_sd, gamma_par, approx_err, smooth = FALSE) {
 
   ###### State space representation
 
@@ -52,9 +53,9 @@ kalman_filter_us = function(y, rw_sd, rw_us_sd, approx_err, smooth = FALSE) {
   B[1, 1] <- rw_sd
 
   C <- matrix(c(
-    1/16, 2/16, 3/16, 4/16, 3/16, 2/16, 1/16,
-    1,    0,    0,    0,    0,    0,    0,
-    1,    0,    0,    0,    0,    0,    0    ), nrow = 3, byrow = TRUE)
+    1/16,      2/16, 3/16, 4/16, 3/16, 2/16, 1/16,
+    1,            0,    0,    0,    0,    0,    0,
+    gamma_par,    0,    0,    0,    0,    0,    0    ), nrow = 3, byrow = TRUE)
 
   D <- diag(c(approx_err, 0, rw_us_sd))
 
@@ -105,15 +106,21 @@ kalman_filter_us = function(y, rw_sd, rw_us_sd, approx_err, smooth = FALSE) {
 
     if (any(ind_nan)) {  # same as (sum(ind_nan)  > 0)
 
+      L <- .safe_chol(y_var_fc_adj)
+      if (is.null(L)) {
+        # not PD → assign penalty
+        return(list(NegLL = 1e10))
+      }
+
       # Kalman gain at t
-      K <- y_cov_fc_adj %*% chol2inv(chol(y_var_fc_adj)) # (A4) = (A2)*C*inv(A3)
+      K <- y_cov_fc_adj %*% chol2inv(L) # (A4) = (A2)*C*inv(A3)
 
       # Posterior mean and covariance of x_t
       xmean <- x_mean_fc + K %*% v_t_adj                 # (A6)
       xvar <- x_var_fc - K %*% t(y_cov_fc_adj)           # (A7)
 
       # Log-likelihood contribution
-      L <- t(chol(y_var_fc_adj))     # lower triangular
+      L <- t(L)                      # lower triangular
       z <- forwardsolve(L, v_t_adj)  # solves L z = v
       LL[t] <- -0.5 * ( sum(ind_nan) * log(2 * pi) +
                           2 * sum(log(diag(L))) + sum(z * z))
@@ -166,9 +173,9 @@ kalman_filter_us = function(y, rw_sd, rw_us_sd, approx_err, smooth = FALSE) {
 #' Kalman Smoother for Quarterly ECB SPF Forecasts incorporating Quarterly US SPF
 #'
 #' This function applies the Kalman smoothing algorithm to a set of filtered
-#' state estimates obtained from from the `kalman_filter_us` function.
+#' state estimates obtained from from the `kalman_filter_us_gamma` function.
 #'
-#' @param states_filtered A list containing the outputs from the `kalman_filter_us` function:
+#' @param states_filtered A list containing the outputs from the `kalman_filter_us_gamma` function:
 #'   \itemize{
 #'     \item{\code{NegLL}}{ Negative log-likelihood.}
 #'     \item{\code{x_fc}}{ Filtered state estimates.}
@@ -193,11 +200,11 @@ kalman_filter_us = function(y, rw_sd, rw_us_sd, approx_err, smooth = FALSE) {
 #' us_spf[10:13] = c(0.9, 1.1, 1, 3)
 #'
 #' y <- cbind(spf,rgdp,us_spf)
-#' states <- kalman_filter_us(y, rw_sd = 0.5, rw_us_sd = 0.5, approx_err = 0.01, smooth = TRUE)
-#' smoothed_states <- kalman_smoother_us(states)
+#' states <- kalman_filter_us_gamma(y, rw_sd = 0.5, rw_us_sd = 0.5, gamma_par = 1, approx_err = 0.01, smooth = TRUE)
+#' smoothed_states <- kalman_smoother_us_gamma(states, gamma_par = 1)[,1]
 #'
 #' @export
-kalman_smoother_us = function(states_filtered) {
+kalman_smoother_us_gamma = function(states_filtered, gamma_par) {
 
   ###### State space representation
 
@@ -205,7 +212,7 @@ kalman_smoother_us = function(states_filtered) {
   C <- matrix(c(
     1/16, 2/16, 3/16, 4/16, 3/16, 2/16, 1/16,
     1,    0,    0,    0,    0,    0,    0,
-    1,    0,    0,    0,    0,    0,    0    ), nrow = 3, byrow = TRUE)
+    gamma_par,    0,    0,    0,    0,    0,    0    ), nrow = 3, byrow = TRUE)
 
 
   #### Kalman smoother recursion
@@ -258,32 +265,34 @@ kalman_smoother_us = function(states_filtered) {
 
 
 
-#' Log-Likelihood Function for Kalman Filter (for rw_sd and rw_us_sd optimization)
+#' Log-Likelihood Function for Kalman Filter (for rw_sd, rw_us_sd, and gamma_par optimization)
 #'
 #' This helper function computes the negative log-likelihood (NegLL)
 #' for a given value of the random walk standard deviation (rw_sd),
-#' using the `kalman_filter` function. It is intended for use in optimization
-#' procedures to estimate `rw_sd` and `rw_us_sd`.
+#' using the `kalman_filter_gamma` function. It is intended for use
+#' in optimization procedures to estimate `rw_sd`, `rw_us_sd`, and `gamma_par`.
 #'
-#' @param rw A 2x1 vector of random walk standard deviations to optimize.
+#' @param params A 3x1 vector of random walk standard deviations and a gamma
+#'   parameter to optimize.
 #' @param y A Tx3 matrix of annualized SPF projections (column 1),
 #'   observed quarterly growth rates (column 2), and quarterly US
 #'   SPF projections (column 3).
 #' @param approx_err The fixed standard deviation of the approximation error.
 #'
 #' @return The negative log-likelihood value (NegLL) for the given
-#'   `rw_sd` and `rw_us_sd`.
+#'   `rw_sd`, `rw_us_sd`, and `gamma_par`.
 #'
 #' @examples
-#' log_likelihood_function_us(rw = c(0.5, 0.5), y = y, approx_err = 0.01)
+#' log_likelihood_function_us_gamma(params = c(0.5, 0.5, 1), y = y, approx_err = 0.01)
 #'
 #' @export
-log_likelihood_function_us <- function(rw, y, approx_err) {
+log_likelihood_function_us_gamma <- function(params, y, approx_err) {
 
   # Run the Kalman filter to get the negative log-likelihood
-  rw_sd <- exp(rw[1])
-  rw_us_sd <- exp(rw[2])
-  result <- kalman_filter_us(y, rw_sd, rw_us_sd, approx_err, smooth = FALSE)
+  rw_sd <- exp(params[1])
+  rw_us_sd <- exp(params[2])
+  gamma_par <- params[3]
+  result <- kalman_filter_us_gamma(y, rw_sd, rw_us_sd, gamma_par, approx_err, smooth = FALSE)
   return(result$NegLL)
 }
 
@@ -312,14 +321,14 @@ log_likelihood_function_us <- function(rw, y, approx_err) {
 #'   \item Applies the Kalman filter and smoother using the estimated \code{rw_sd}.
 #' }
 #'
-#' @seealso \code{\link{kalman_filter_us}}, \code{\link{log_likelihood_function_us}}
+#' @seealso \code{\link{kalman_filter_us_gamma}}, \code{\link{log_likelihood_function_us_gamma}}
 #'
 #' @examples
 #' # Example usage with synthetic data:
-#' SPF <- SPF_filter_us(rgdp = y[,2], spf = y[,1], us_spf = y[,3])
+#' SPF <- SPF_filter_us_gamma(rgdp = y[,2], spf = y[,1], us_spf = y[,3])
 #'
 #' @export
-SPF_filter_us <- function(rgdp,spf,us_spf) {
+SPF_filter_us_gamma <- function(rgdp,spf,us_spf) {
 
   # Prepare input for Kalman filter and smoother
   y <- cbind(spf,rgdp,us_spf)
@@ -330,30 +339,36 @@ SPF_filter_us <- function(rgdp,spf,us_spf) {
   y[1:(first_nan_pos-1),1] <- NaN
 
   # Starting values
-  start <- c(0.5, 0.5)
+  start <- c(0.5, 0.5, 0.5)
 
   # Log instead of lower bound for numerical improvements
-  start_log <- c(log(start))
+  start_log <- c(log(start[1:2]), start[3])
 
   est_par <- optim(par = start_log,
-                  fn = log_likelihood_function_us,
+                  fn = log_likelihood_function_us_gamma,
                   y = y,
                   approx_err = 0.01,
                   method = "L-BFGS-B",
-                  lower = c(-Inf, -Inf),
-                  upper = c(Inf, Inf),
+                  lower = c(-Inf, -Inf, 0),
+                  upper = c(Inf, Inf, 1.5),
                   control = list(trace = 0, maxit = 2000))
 
   # Transform back from log parameters
-  est_pars <- c(exp(est_par$par))
+  est_pars <- c(exp(est_par$par[1:2]), est_par$par[3])
 
-  # Given the estimate 'est_sd', we can filter and smooth states, i.e., implied SPF
-  filtered_states <- kalman_filter_us(y, rw_sd = est_pars[1], rw_us_sd = est_pars[2],
-                                      approx_err = 0.01, smooth = TRUE)
-  SPF <- as.matrix(kalman_smoother_us(filtered_states)[,1])
+  # Given the estimate 'est_par', we can filter and smooth states, i.e., implied SPF
+  filtered_states <- kalman_filter_us_gamma(y, rw_sd = est_pars[1], rw_us_sd = est_pars[2],
+                                            gamma_par = est_pars[3], approx_err = 0.01, smooth = TRUE)
+  SPF <- as.matrix(kalman_smoother_us_gamma(filtered_states,est_pars[3])[,1])
   colnames(SPF) <- "SPF_implied"
 
   return(SPF)
 
+}
+
+### Auxiliary functions
+.safe_chol <- function(mat) {
+  out <- tryCatch(chol(mat), error = function(e) NULL)
+  return(out)
 }
 

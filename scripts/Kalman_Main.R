@@ -17,6 +17,7 @@ library(tibble)     # For tibble-based output
 rm(list = ls())
 cat("\014")
 
+##### Read in and merge SPF and RGDP data
 
 # Read in filtered quarterly SPF forecasts
 spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
@@ -118,8 +119,8 @@ spf_forecasts_ny <- spf_forecasts_ny %>%
   select(-target_year, -target_quarter)
 
 evaluation_data_cy <- rgdp %>%
-  left_join(spf_forecasts_cy, by = "ref_period") %>%
-  filter(ref_period >= as.yearqtr("2002 Q1", format = "%Y Q%q"))
+  left_join(spf_forecasts_cy, by = "ref_period") # %>%
+  # filter(ref_period >= as.yearqtr("2002 Q1", format = "%Y Q%q"))
 
 evaluation_data_ny <- rgdp %>%
   left_join(spf_forecasts_ny, by = "ref_period")
@@ -135,7 +136,7 @@ spf_forecasts_cy$target_quarter <- target_aux[,1]
 # Merge CY and NY forecasts into one table with gdp_growth
 plot_data <- evaluation_data_cy %>%
   filter(ref_period >= as.yearqtr("2000 Q1", format = "%Y Q%q"),
-         ref_period <= as.yearqtr("2019 Q4", format = "%Y Q%q")) %>%
+         ref_period <= as.yearqtr("2024 Q4", format = "%Y Q%q")) %>%
   select(ref_period, gdp_growth, spf_cy = spf_h0) %>%
   left_join(
     evaluation_data_ny %>% select(ref_period, spf_ny = spf_h0),
@@ -160,6 +161,94 @@ ggplot(plot_data_long, aes(x = ref_period, y = value, color = series)) +
   theme_minimal()
 
 
+
+##### Forecast evaluation
+rm(list = setdiff(ls(), c("spf_forecasts_cy", "spf_forecasts_ny",
+                          "evaluation_data_cy", "evaluation_data_ny")))
+
+# Evaluation data (CY versus NY)
+evaluation_data <- evaluation_data_cy %>%
+  filter(!(is.na(spf_h0) | is.na(spf_h4)))
+
+# Exclude 2009 and 2010?
+# evaluation_data <- evaluation_data %>%
+#  filter(!(target_year %in% c(2009, 2010)))
+
+evaluation_data <- evaluation_data %>%
+  filter(target_year < 2020 & target_year > 2000)
+
+## Forecast errors
+evaluation_data <- evaluation_data %>%
+  mutate(fc_error_0 = gdp_growth - spf_h0,
+         fc_error_1 = gdp_growth - spf_h1,
+         fc_error_2 = gdp_growth - spf_h2,
+         fc_error_3 = gdp_growth - spf_h3,
+         fc_error_4 = gdp_growth - spf_h4)
+
+
+
+### Unbiased
+results <- lapply(0:4, function(h) {
+  # Get formula as string and evaluate
+  formula <- as.formula(paste0("fc_error_", h, " ~ 1"))
+
+  # Fit regression
+  model <- lm(formula, data = evaluation_data)
+
+  # Newey-West SE (you can choose lag = h or any rule-of-thumb)
+  nw <- coeftest(model, vcov = NeweyWest(model, lag = h, prewhite = FALSE))
+
+  # Return horizon, estimate, SE, and p-value
+  tibble(
+    horizon = h,
+    intercept = nw[1, 1],
+    std_error = nw[1, 2],
+    p_value = nw[1, 4]
+  )
+})
+
+# Combine all into one table
+results_table_bias <- bind_rows(results)
+
+
+### MSE
+
+# Compute historical mean of GDP growth (the naive forecast)
+gdp_mean <- mean(evaluation_data$gdp_growth, na.rm = TRUE)
+
+# Loop over h = 0 to 4
+error_stats <- lapply(0:4, function(h) {
+  actual <- evaluation_data$gdp_growth
+  spf_forecast_error <- evaluation_data[[paste0("fc_error_", h)]]
+
+  # Compute SPF errors
+  spf_mse <- mean((spf_forecast_error)^2, na.rm = TRUE)
+  spf_mae <- mean(abs(spf_forecast_error), na.rm = TRUE)
+
+  # Compute benchmark errors: actual - historical mean
+  benchmark_error <- actual - gdp_mean
+  hist_mean_mse <- mean((benchmark_error)^2, na.rm = TRUE)
+  hist_mean_mae <- mean(abs(benchmark_error), na.rm = TRUE)
+
+  tibble(
+    horizon = h,
+    spf_mse = spf_mse,
+    spf_mae = spf_mae,
+    hist_mean_mse = hist_mean_mse,
+    hist_mean_mae = hist_mean_mae
+  )
+})
+
+results_table_mse <- bind_rows(error_stats)
+
+
+print(results_table_bias)
+print(results_table_mse)
+
+
+
+
+#### Here comes olf evaluation code:
 
 ### Fit AR(1) in spirit of direct forecasting
 
@@ -430,7 +519,7 @@ print(results_table)
 # Compute historical mean of GDP growth (the naive forecast)
 gdp_mean <- mean(evaluation_data$gdp_growth, na.rm = TRUE)
 
-# Loop over h = 1 to 4
+# Loop over h = 0 to 4
 error_stats <- lapply(0:4, function(h) {
   actual <- evaluation_data$gdp_growth
   spf_forecast_error_cy <- evaluation_data[[paste0("fc_error_cy_", h)]]
@@ -489,6 +578,11 @@ print(comparison_table)
 
 
 
+
+
+
+
+
 ################### Incorporating US-SPF in Kalman
 rm(list = ls())
 cat("\014")
@@ -505,13 +599,41 @@ spf <- rbind(NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,2.338002864,NaN,NaN,NaN
              NaN,1.885626914,NaN,NaN,NaN,1.833479425)
 
 us_spf <- rgdp * 0.8
-#us_spf[10:13] = c(0.9, 1.1, 1, 3)
+us_spf[10:13] = c(0.9, 1.1, 1, 3)
 
 
 SPF_filtered_us <- SPF_filter_us(rgdp,spf,us_spf)
 
 source(here("scripts", "kalman_filter.R"))
 SPF_filtered <- SPF_filter(rgdp,spf)
+
+
+
+
+
+
+
+################### Incorporating US-SPF in Kalman estimating gamma
+rm(list = ls())
+cat("\014")
+
+
+source(here("scripts", "kalman_filter_us_gamma.R"))
+
+
+rgdp <- rbind(-1.975905496,-0.5638928,2.660615959,2.566018083,2.244165169,2.060216621,
+              4.861686218,3.396030031,1.409498959,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,
+              NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN)
+spf <- rbind(NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,2.338002864,NaN,NaN,NaN,1.65436809,
+             NaN,NaN,NaN,2.055519891,NaN,NaN,NaN,1.915861112,NaN,NaN,NaN,1.912181401,NaN,NaN,
+             NaN,1.885626914,NaN,NaN,NaN,1.833479425)
+
+us_spf <- rgdp * 0.8
+us_spf[10:13] = c(0.9, 1.1, 1, 3)
+
+
+SPF_filtered_us_gamma <- SPF_filter_us_gamma(rgdp,spf,us_spf)
+
 
 
 
