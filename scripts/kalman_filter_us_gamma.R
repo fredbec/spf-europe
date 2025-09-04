@@ -49,7 +49,7 @@ kalman_filter_us_gamma = function(y, rw_sd, rw_us_sd, gamma_par, approx_err, smo
     0,0,0,0,1,0,0,
     0,0,0,0,0,1,0 ), nrow = 7, byrow = TRUE)
 
-  B <- matrix(0, 7, 7)
+  B <- matrix(0, 7, 1)
   B[1, 1] <- rw_sd
 
   C <- matrix(c(

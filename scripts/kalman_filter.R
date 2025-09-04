@@ -43,7 +43,7 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
     0,0,0,0,1,0,0,
     0,0,0,0,0,1,0 ), nrow = 7, byrow = TRUE)
 
-  B <- matrix(0, 7, 7)
+  B <- matrix(0, 7, 1)
   B[1, 1] <- rw_sd
 
   C <- matrix(c(
