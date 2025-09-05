@@ -1,11 +1,14 @@
-#' Kalman Filter for Quarterly SPF Forecasts
+#' Kalman Filter for Quarterly ECB SPF Forecasts incorporating Quarterly US SPF
 #'
 #' Computes the Kalman filter-based negative log-likelihood for a
 #' given random walk variance in a state-space model.
 #'
-#' @param y A Tx2 matrix of annualized SPF projections (column 1)
-#'   and observed quarterly growth rates (column 2).
+#' @param y A Tx3 matrix of annualized SPF projections (column 1),
+#'   observed quarterly growth rates (column 2), and quarterly US
+#'   SPF projections (column 3).
 #' @param rw_sd Standard deviation of the random walk process.
+#' @param rw_us_sd Standard deviation of the US SPF random walk process.
+#' @param gamma_par Gamma parameter in measurement equation for US SPF
 #' @param approx_err Standard deviation of the approximation error.
 #' @param smooth Logical; if TRUE, outputs smoother variables.
 #'
@@ -19,17 +22,20 @@
 #'   \item{nan_ind}{Indicator for informative states (if smooth = TRUE)}
 #'
 #' @examples
-#' q <- rbind(-1.975905496,-0.5638928,2.660615959,2.566018083,2.244165169,2.060216621,
+## rgdp <- rbind(-1.975905496,-0.5638928,2.660615959,2.566018083,2.244165169,2.060216621,
 #'            4.861686218,3.396030031,1.409498959,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,
 #'            NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN)
-#' a <- rbind(NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,2.338002864,NaN,NaN,NaN,
+#' spf <- rbind(NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,2.338002864,NaN,NaN,NaN,
 #'            1.65436809,NaN,NaN,NaN,2.055519891,NaN,NaN,NaN,1.915861112,NaN,NaN,NaN,
 #'            1.912181401,NaN,NaN,NaN,1.885626914,NaN,NaN,NaN,1.833479425)
-#' y <- cbind(a,q)
-#' result <- kalman_filter(y, rw_sd = 0.5, approx_err = 0.01, smooth = TRUE)
+#' us_spf <- rgdp * 0.8
+#' us_spf[10:13] = c(0.9, 1.1, 1, 3)
+#'
+#' y <- cbind(spf,rgdp,us_spf)
+#' result <- kalman_filter_us_gamma(y, rw_sd = 0.5, rw_us_sd = 0.5, gamma_par = 1, approx_err = 0.01, smooth = TRUE)
 #'
 #' @export
-kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
+kalman_filter_us_gamma = function(y, rw_sd, rw_us_sd, gamma_par, approx_err, smooth = FALSE) {
 
   ###### State space representation
 
@@ -47,10 +53,11 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
   B[1, 1] <- rw_sd
 
   C <- matrix(c(
-    1/16, 2/16, 3/16, 4/16, 3/16, 2/16, 1/16,
-    1,    0,    0,    0,    0,    0,    0    ), nrow = 2, byrow = TRUE)
+    1/16,      2/16, 3/16, 4/16, 3/16, 2/16, 1/16,
+    1,            0,    0,    0,    0,    0,    0,
+    gamma_par,    0,    0,    0,    0,    0,    0    ), nrow = 3, byrow = TRUE)
 
-  D <- diag(c(approx_err, 0))
+  D <- diag(c(approx_err, 0, rw_us_sd))
 
   # Output required for Kalman smoother (smooth = TRUE)
   TT <- nrow(y)
@@ -58,9 +65,9 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
     x_fc <- matrix(data=NA,nrow=TT,ncol=7)
     x_fc_var <- array(rep(NA, 7*7*TT), dim=c(7, 7, TT))
     Lt <- array(rep(NA, 7*7*TT), dim=c(7, 7, TT))
-    v_t_out <- matrix(data=NA,nrow=2,ncol=TT)
-    y_var_fc_out <- array(rep(NA, 2*2*TT), dim=c(2, 2, TT))
-    ind_nan_out <- matrix(data=NA,nrow=2,ncol=TT)
+    v_t_out <- matrix(data=NA,nrow=3,ncol=TT)
+    y_var_fc_out <- array(rep(NA, 3*3*TT), dim=c(3, 3, TT))
+    ind_nan_out <- matrix(data=NA,nrow=3,ncol=TT)
   }
 
 
@@ -99,16 +106,25 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
 
     if (any(ind_nan)) {  # same as (sum(ind_nan)  > 0)
 
+      L <- .safe_chol(y_var_fc_adj)
+      if (is.null(L)) {
+        # not PD → assign penalty
+        return(list(NegLL = 1e10))
+      }
+
       # Kalman gain at t
-      K <- y_cov_fc_adj %*% chol2inv(chol(y_var_fc_adj)) # (A4) = (A2)*C*inv(A3)
+      K <- y_cov_fc_adj %*% chol2inv(L) # (A4) = (A2)*C*inv(A3)
 
       # Posterior mean and covariance of x_t
       xmean <- x_mean_fc + K %*% v_t_adj                 # (A6)
-      xvar <- x_var_fc - K %*%t (y_cov_fc_adj)           # (A7)
+      xvar <- x_var_fc - K %*% t(y_cov_fc_adj)           # (A7)
 
       # Log-likelihood contribution
-      LL[t] = - 0.5 * ( sum(ind_nan)*log(2*pi) + log(det(matrix(y_var_fc_adj)))
-                        + t(v_t_adj) %*% chol2inv(chol(y_var_fc_adj)) %*% v_t_adj)
+      L <- t(L)                      # lower triangular
+      z <- forwardsolve(L, v_t_adj)  # solves L z = v
+      LL[t] <- -0.5 * ( sum(ind_nan) * log(2 * pi) +
+                          2 * sum(log(diag(L))) + sum(z * z))
+
 
     } else {
 
@@ -126,8 +142,8 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
       y_var_fc_out[, ,t] <- y_var_fc
 
       # Kalman gain
-      K_aux <- matrix(data=0,nrow=7,ncol=2)
-      K_aux[,ind_nan] <- K;
+      K_aux <- matrix(data=0,nrow=7,ncol=3)
+      K_aux[,ind_nan] <- K
       ind_nan_out[,t] <- ind_nan
 
       # Auxiliary variable
@@ -154,12 +170,12 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
 
 
 
-#' Kalman Smoother for Quarterly SPF Forecasts
+#' Kalman Smoother for Quarterly ECB SPF Forecasts incorporating Quarterly US SPF
 #'
 #' This function applies the Kalman smoothing algorithm to a set of filtered
-#' state estimates obtained from from the `kalman_filter` function.
+#' state estimates obtained from from the `kalman_filter_us_gamma` function.
 #'
-#' @param states_filtered A list containing the outputs from the `kalman_filter` function:
+#' @param states_filtered A list containing the outputs from the `kalman_filter_us_gamma` function:
 #'   \itemize{
 #'     \item{\code{NegLL}}{ Negative log-likelihood.}
 #'     \item{\code{x_fc}}{ Filtered state estimates.}
@@ -174,25 +190,29 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
 #' to a time step and each column corresponds to a state variable.
 #'
 #' @examples
-#' q <- rbind(-1.975905496,-0.5638928,2.660615959,2.566018083,2.244165169,2.060216621,
+#' rgdp <- rbind(-1.975905496,-0.5638928,2.660615959,2.566018083,2.244165169,2.060216621,
 #'            4.861686218,3.396030031,1.409498959,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,
 #'            NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN)
-#' a <- rbind(NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,2.338002864,NaN,NaN,NaN,
+#' spf <- rbind(NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,2.338002864,NaN,NaN,NaN,
 #'            1.65436809,NaN,NaN,NaN,2.055519891,NaN,NaN,NaN,1.915861112,NaN,NaN,NaN,
 #'            1.912181401,NaN,NaN,NaN,1.885626914,NaN,NaN,NaN,1.833479425)
-#' y <- cbind(a,q)
-#' states <- kalman_filter(y, rw_sd = 0.5, approx_err = 0.01, smooth = TRUE)
-#' smoothed_states <- kalman_smoother(states)
+#' us_spf <- rgdp * 0.8
+#' us_spf[10:13] = c(0.9, 1.1, 1, 3)
+#'
+#' y <- cbind(spf,rgdp,us_spf)
+#' states <- kalman_filter_us_gamma(y, rw_sd = 0.5, rw_us_sd = 0.5, gamma_par = 1, approx_err = 0.01, smooth = TRUE)
+#' smoothed_states <- kalman_smoother_us_gamma(states, gamma_par = 1)[,1]
 #'
 #' @export
-kalman_smoother = function(states_filtered) {
+kalman_smoother_us_gamma = function(states_filtered, gamma_par) {
 
   ###### State space representation
 
   ### Measurement equation
   C <- matrix(c(
     1/16, 2/16, 3/16, 4/16, 3/16, 2/16, 1/16,
-    1,    0,    0,    0,    0,    0,    0    ), nrow = 2, byrow = TRUE)
+    1,    0,    0,    0,    0,    0,    0,
+    gamma_par,    0,    0,    0,    0,    0,    0    ), nrow = 3, byrow = TRUE)
 
 
   #### Kalman smoother recursion
@@ -245,28 +265,34 @@ kalman_smoother = function(states_filtered) {
 
 
 
-#' Log-Likelihood Function for Kalman Filter (for rw_sd optimization)
+#' Log-Likelihood Function for Kalman Filter (for rw_sd, rw_us_sd, and gamma_par optimization)
 #'
 #' This helper function computes the negative log-likelihood (NegLL)
 #' for a given value of the random walk standard deviation (rw_sd),
-#' using the `kalman_filter` function. It is intended for use in optimization
-#' procedures to estimate `rw_sd`.
+#' using the `kalman_filter_gamma` function. It is intended for use
+#' in optimization procedures to estimate `rw_sd`, `rw_us_sd`, and `gamma_par`.
 #'
-#' @param rw_sd The random walk standard deviation (rw_sd) to optimize.
-#' @param y A Tx2 matrix of annualized SPF projections (column 1)
-#'   and observed quarterly growth rates (column 2).
+#' @param params A 3x1 vector of random walk standard deviations and a gamma
+#'   parameter to optimize.
+#' @param y A Tx3 matrix of annualized SPF projections (column 1),
+#'   observed quarterly growth rates (column 2), and quarterly US
+#'   SPF projections (column 3).
 #' @param approx_err The fixed standard deviation of the approximation error.
 #'
-#' @return The negative log-likelihood value (NegLL) for the given `rw_sd`.
+#' @return The negative log-likelihood value (NegLL) for the given
+#'   `rw_sd`, `rw_us_sd`, and `gamma_par`.
 #'
 #' @examples
-#' log_likelihood_function(rw_sd = 0.5, y = y, approx_err = 0.01)
+#' log_likelihood_function_us_gamma(params = c(0.5, 0.5, 1), y = y, approx_err = 0.01)
 #'
 #' @export
-log_likelihood_function <- function(rw_sd, y, approx_err) {
+log_likelihood_function_us_gamma <- function(params, y, approx_err) {
 
   # Run the Kalman filter to get the negative log-likelihood
-  result <- kalman_filter(y, rw_sd, approx_err, smooth = FALSE)
+  rw_sd <- exp(params[1])
+  rw_us_sd <- exp(params[2])
+  gamma_par <- params[3]
+  result <- kalman_filter_us_gamma(y, rw_sd, rw_us_sd, gamma_par, approx_err, smooth = FALSE)
   return(result$NegLL)
 }
 
@@ -295,39 +321,54 @@ log_likelihood_function <- function(rw_sd, y, approx_err) {
 #'   \item Applies the Kalman filter and smoother using the estimated \code{rw_sd}.
 #' }
 #'
-#' @seealso \code{\link{kalman_filter}}, \code{\link{log_likelihood_function}}
+#' @seealso \code{\link{kalman_filter_us_gamma}}, \code{\link{log_likelihood_function_us_gamma}}
 #'
 #' @examples
 #' # Example usage with synthetic data:
-#' SPF <- SPF_filter(rgdp = y[,2], spf = y[,1])
+#' SPF <- SPF_filter_us_gamma(rgdp = y[,2], spf = y[,1], us_spf = y[,3])
 #'
 #' @export
-SPF_filter <- function(rgdp,spf) {
+SPF_filter_us_gamma <- function(rgdp,spf,us_spf) {
 
   # Prepare input for Kalman filter and smoother
-  y <- cbind(spf,rgdp)
+  y <- cbind(spf,rgdp,us_spf)
 
   # SPF forecasts prior to latest GDP release is not considered by the filter
   nan_idx <- which(is.nan(rgdp))
   first_nan_pos <- if (length(nan_idx) > 0) min(nan_idx) else NA
   y[1:(first_nan_pos-1),1] <- NaN
 
-  # Estimate the random walk error standard deviation
-  start <- 0.5
-  est_sd <- optim(par = start,
-                  fn = log_likelihood_function,
+  # Starting values
+  start <- c(0.5, 0.5, 0.5)
+
+  # Log instead of lower bound for numerical improvements
+  start_log <- c(log(start[1:2]), start[3])
+
+  est_par <- optim(par = start_log,
+                  fn = log_likelihood_function_us_gamma,
                   y = y,
                   approx_err = 0.01,
                   method = "L-BFGS-B",
-                  lower = 0.0001,
-                  upper = Inf)
+                  lower = c(-Inf, -Inf, 0),
+                  upper = c(Inf, Inf, 1.5),
+                  control = list(trace = 0, maxit = 2000))
 
-  # Given the estimate 'est_sd', filter and smooth states, i.e., implied SPF
-  filtered_states <- kalman_filter(y, rw_sd = est_sd$par, approx_err = 0.01, smooth = TRUE)
-  SPF <- as.matrix(kalman_smoother(filtered_states)[,1])
+  # Transform back from log parameters
+  est_pars <- c(exp(est_par$par[1:2]), est_par$par[3])
+
+  # Given the estimate 'est_par', we can filter and smooth states, i.e., implied SPF
+  filtered_states <- kalman_filter_us_gamma(y, rw_sd = est_pars[1], rw_us_sd = est_pars[2],
+                                            gamma_par = est_pars[3], approx_err = 0.01, smooth = TRUE)
+  SPF <- as.matrix(kalman_smoother_us_gamma(filtered_states,est_pars[3])[,1])
   colnames(SPF) <- "SPF_implied"
 
   return(SPF)
 
+}
+
+### Auxiliary functions
+.safe_chol <- function(mat) {
+  out <- tryCatch(chol(mat), error = function(e) NULL)
+  return(out)
 }
 

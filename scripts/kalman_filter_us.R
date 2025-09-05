@@ -48,7 +48,7 @@ kalman_filter_us = function(y, rw_sd, rw_us_sd, approx_err, smooth = FALSE) {
     0,0,0,0,1,0,0,
     0,0,0,0,0,1,0 ), nrow = 7, byrow = TRUE)
 
-  B <- matrix(0, 7, 7)
+  B <- matrix(0, 7, 1)
   B[1, 1] <- rw_sd
 
   C <- matrix(c(
@@ -263,7 +263,7 @@ kalman_smoother_us = function(states_filtered) {
 #' This helper function computes the negative log-likelihood (NegLL)
 #' for a given value of the random walk standard deviation (rw_sd),
 #' using the `kalman_filter` function. It is intended for use in optimization
-#' procedures to estimate `rw_sd`.
+#' procedures to estimate `rw_sd` and `rw_us_sd`.
 #'
 #' @param rw A 2x1 vector of random walk standard deviations to optimize.
 #' @param y A Tx3 matrix of annualized SPF projections (column 1),
@@ -281,8 +281,8 @@ kalman_smoother_us = function(states_filtered) {
 log_likelihood_function_us <- function(rw, y, approx_err) {
 
   # Run the Kalman filter to get the negative log-likelihood
-  rw_sd <- rw[1]
-  rw_us_sd <- rw[2]
+  rw_sd <- exp(rw[1])
+  rw_us_sd <- exp(rw[2])
   result <- kalman_filter_us(y, rw_sd, rw_us_sd, approx_err, smooth = FALSE)
   return(result$NegLL)
 }
@@ -312,7 +312,7 @@ log_likelihood_function_us <- function(rw, y, approx_err) {
 #'   \item Applies the Kalman filter and smoother using the estimated \code{rw_sd}.
 #' }
 #'
-#' @seealso \code{\link{kalman_filter}}, \code{\link{log_likelihood_function}}
+#' @seealso \code{\link{kalman_filter_us}}, \code{\link{log_likelihood_function_us}}
 #'
 #' @examples
 #' # Example usage with synthetic data:
@@ -329,18 +329,26 @@ SPF_filter_us <- function(rgdp,spf,us_spf) {
   first_nan_pos <- if (length(nan_idx) > 0) min(nan_idx) else NA
   y[1:(first_nan_pos-1),1] <- NaN
 
-  # Estimate the random walk error standard deviations
-  start <- c(0.4, 0.4)
-  est_sd <- optim(par = start,
+  # Starting values
+  start <- c(0.5, 0.5)
+
+  # Log instead of lower bound for numerical improvements
+  start_log <- c(log(start))
+
+  est_par <- optim(par = start_log,
                   fn = log_likelihood_function_us,
                   y = y,
                   approx_err = 0.01,
                   method = "L-BFGS-B",
-                  lower = c(0.01, 0.01),
-                  upper = c(Inf, Inf))
+                  lower = c(-Inf, -Inf),
+                  upper = c(Inf, Inf),
+                  control = list(trace = 0, maxit = 2000))
+
+  # Transform back from log parameters
+  est_pars <- c(exp(est_par$par))
 
   # Given the estimate 'est_sd', we can filter and smooth states, i.e., implied SPF
-  filtered_states <- kalman_filter_us(y, rw_sd = est_sd$par[1], rw_us_sd = est_sd$par[2],
+  filtered_states <- kalman_filter_us(y, rw_sd = est_pars[1], rw_us_sd = est_pars[2],
                                       approx_err = 0.01, smooth = TRUE)
   SPF <- as.matrix(kalman_smoother_us(filtered_states)[,1])
   colnames(SPF) <- "SPF_implied"
