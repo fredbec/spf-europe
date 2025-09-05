@@ -130,7 +130,6 @@ res_spf_filter <- rbindlist(res_spf_filter)
 data.table::fwrite(res_spf_filter, here("data", "filter_spf_data_medianfc_withus.csv"))
 #with US SPF, fixed release
 for(rel_hor in 0:3){
-  print(rel_hor)
   res_spf_filter <- vector(mode = "list", length = nrow(combs))
   for(i in 1:nrow(combs)){
 
