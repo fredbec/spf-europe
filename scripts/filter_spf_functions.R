@@ -1,5 +1,5 @@
 source(here("scripts", "kalman_filter.R"))
-source(here("scripts", "kalman_smoother.R"))
+source(here("scripts", "kalman_filter_us.R"))
 
 get_rtd <- function(real_time_data,
                     current_issue,
@@ -67,6 +67,8 @@ filter_dat <- function(current_quarter,
                        current_year,
                        SPF_data,
                        real_time_data,
+                       SPF_data_US = NULL,
+                       release_US_SPF = "latest",
                        rtd_issue = c("latest_vintage", "rtd")){
 
   if(length(rtd_issue) > 1){
@@ -114,8 +116,75 @@ filter_dat <- function(current_quarter,
     DT(is.na(spf_fc), spf_fc := NaN)
 
 
-  spf_filter_vals_cy <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc)
-  spf_filter_vals_cyandny <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc)
+  if(!is.null(SPF_data_US)){
+
+    if(release_US_SPF == "latest"){
+      cpreds_zero <- SPF_data_US |>
+        DT(,step_ahead := (target_quarter - origin_quarter) + (target_year - origin_year)*4) |>
+        DT(step_ahead == 0 & origin_year <= current_year) |>
+        DT(, prev := ifelse(origin_year == current_year & origin_quarter >= current_quarter, 1, 0)) |>
+        DT(prev == 0) |>
+        DT(, c("prev", "step_ahead", "origin_year", "origin_quarter") := NULL) |>
+        setnames("prediction", "rgdp_growth_usspf")
+
+      cpreds_forward <- SPF_data_US |>
+        DT(origin_year == current_year & origin_quarter == current_quarter)|>
+        DT(, c("step_ahead", "origin_year", "origin_quarter") := NULL) |>
+        setnames("prediction", "rgdp_growth_usspf")
+
+      cpreds_current <- rbind(cpreds_zero, cpreds_forward)
+
+      data_filter_cy <- cpreds_current[data_filter_cy, on = c("target_year", "target_quarter")]
+
+      data_filter_cyandny <- cpreds_current[data_filter_cyandny, on = c("target_year", "target_quarter")] |>
+        DT(, rgdp_growth_usspf := ifelse(is.na(rgdp_growth_usspf), NaN, rgdp_growth_usspf))
+    } else if (is.numeric(release_US_SPF)){
+
+      if(release_US_SPF>3){
+
+        stop("release_US_SPF must be 3 or smaller, longer horizons currently not available")
+
+
+      }
+
+      cpreds_zero <- SPF_data_US |>
+        DT(,step_ahead := (target_quarter - origin_quarter) + (target_year - origin_year)*4) |>
+        DT(step_ahead == release_US_SPF & origin_year <= current_year) |>
+        DT(, prev := ifelse(origin_year == current_year & origin_quarter > current_quarter, 1, 0)) |> #important that here we have origin_quarter > current_quarter and not origin_quarter >=  current_quarter (as above)
+        DT(prev == 0) |>
+        DT(, c("prev", "step_ahead", "origin_year", "origin_quarter") := NULL) |>
+        setnames("prediction", "rgdp_growth_usspf")
+
+      data_filter_cy <- cpreds_zero[data_filter_cy, on = c("target_year", "target_quarter")]
+
+      data_filter_cyandny <- cpreds_zero[data_filter_cyandny, on = c("target_year", "target_quarter")] |>
+        DT(, rgdp_growth_usspf := ifelse(is.na(rgdp_growth_usspf), NaN, rgdp_growth_usspf))
+
+    } else {
+    stop("release_US_SPF must either be 'latest' or numeric")
+  }
+  }
+
+  if(is.null(SPF_data_US)){
+    spf_filter_vals_cy <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc)
+    spf_filter_vals_cyandny <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc)
+  } else {
+    #following code is a bit adhoc, since there was an error in the instance 2018Q1
+    #with the Cholesky decomposition
+    spf_filter_vals_cy <- tryCatch(
+      {
+        SPF_filter_us(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
+      },
+      error = function(e){
+        message(paste0(current_year, "Q", current_quarter))
+
+        data_filter_cy[, 3] <- data_filter_cy[, 3] - rnorm(1, sd = 0.0001)
+        SPF_filter_us(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
+      }
+    )
+    #spf_filter_vals_cyandny <- spf_filter_vals_cy
+    spf_filter_vals_cyandny <- SPF_filter_us(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, data_filter_cyandny$rgdp_growth_usspf)
+  }
 
   #make spf_filter_dat (take target columns from data_filter_cyandny)
   spf_filter_dat <- data_filter_cyandny |>

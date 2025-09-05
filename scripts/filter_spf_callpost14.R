@@ -75,13 +75,18 @@ spfdat <- fread(here("data", "spf_consolidated.csv")) |>
   unique()
 
 
+SPF_dataUS <- fread(here("data", "spf_us_consolidated.csv"))
+
 #make a combination of all years and quarters, to loop over
 quarters <- 1:4
+
 years <- 2001:2024
 combs <- CJ(year = years,
             quarter = quarters)
 
 res_spf_filter <- vector(mode = "list", length = nrow(combs))
+
+#without US SPF
 for(i in 1:nrow(combs)){
 
   cissue <- combs[i,]
@@ -99,3 +104,52 @@ for(i in 1:nrow(combs)){
 res_spf_filter <- rbindlist(res_spf_filter)
 
 data.table::fwrite(res_spf_filter, here("data", "filter_spf_data_medianfc.csv"))
+
+
+res_spf_filter <- vector(mode = "list", length = nrow(combs))
+
+#with US SPF, "latest"
+for(i in 1:nrow(combs)){
+
+  cissue <- combs[i,]
+
+  cqu <- cissue$quarter
+  cyr <- cissue$year
+
+  res_spf_filter[[i]] <- filter_dat(current_quarter = cqu,
+                                    current_year = cyr,
+                                    SPF_data = spfdat,
+                                    real_time_data = rtd,
+                                    SPF_data_US = SPF_dataUS,
+                                    release_US_SPF = "latest",
+                                    rtd_issue = "latest_vintage")
+}
+
+res_spf_filter <- rbindlist(res_spf_filter)
+
+data.table::fwrite(res_spf_filter, here("data", "filter_spf_data_medianfc_withus.csv"))
+#with US SPF, fixed release
+for(rel_hor in 0:3){
+  print(rel_hor)
+  res_spf_filter <- vector(mode = "list", length = nrow(combs))
+  for(i in 1:nrow(combs)){
+
+    cissue <- combs[i,]
+
+    cqu <- cissue$quarter
+    cyr <- cissue$year
+    print(cissue)
+    res_spf_filter[[i]] <- filter_dat(current_quarter = cqu,
+                                      current_year = cyr,
+                                      SPF_data = spfdat,
+                                      real_time_data = rtd,
+                                      SPF_data_US = SPF_dataUS,
+                                      release_US_SPF = rel_hor,
+                                      rtd_issue = "latest_vintage")
+  }
+
+  res_spf_filter <- rbindlist(res_spf_filter)
+
+  data.table::fwrite(res_spf_filter, here("data", paste0("filter_spf_data_medianfc_withus_stepahead", rel_hor,  ".csv")))
+}
+
