@@ -163,13 +163,130 @@ ggplot(plot_data_long, aes(x = ref_period, y = value, color = series)) +
 
 
 
+### Should go into a function
+AR_benchmark = function() {
+
+  # Benchmark models in real-time?
+  rw_length <- 10
+  ar_length <- 40
+
+  ref_qtrs <- seq(as.yearqtr("2001 Q1", format = "%Y Q%q"), # Has to be correctly chosen!
+                  as.yearqtr("2024 Q4", format = "%Y Q%q"), # Has to be correctly chosen!
+                  by = 0.25)
+
+  # Convert to data frame with formatted ref_period
+  fc_AR1 <- tibble(
+    ref_period = format(ref_qtrs, "%Y Q%q"),
+    AR1_0 = NA_real_,
+    AR1_1 = NA_real_,
+    AR1_2 = NA_real_,
+    AR1_3 = NA_real_,
+    AR1_4 = NA_real_
+  )
+
+  fc_RWmean <- tibble(
+    ref_period = format(ref_qtrs, "%Y Q%q"),
+    RWmean_0 = NA_real_,
+    RWmean_1 = NA_real_,
+    RWmean_2 = NA_real_,
+    RWmean_3 = NA_real_,
+    RWmean_4 = NA_real_,
+  )
+
+
+  # Filter the relevant vintages
+  vintages <- rgdp_all %>%
+    filter(origin_year >= 2001 & origin_year <= 2024, # Has to be correctly chosen!
+           origin_month %in% c(2, 5, 8, 11)) %>%
+    distinct(origin_year, origin_month) %>%
+    arrange(origin_year, origin_month)
+
+
+  # Loop over each vintage
+  for (i in seq_len(nrow(vintages) - 4)) {
+    this_year <- vintages$origin_year[i]
+    this_month <- vintages$origin_month[i]
+    this_quarter <- floor(this_month / 3) + 1
+
+    # Read out vintage
+    vintage_data <- rgdp_all %>% filter(origin_year == this_year, origin_month == this_month)
+    vintage_data <- vintage_data[-1, ]
+
+    # Merge SPF to vintages
+    vintage_data <- vintage_data %>%
+      mutate(merge_date = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q") )
+
+    # Lag order
+    T <- dim(vintage_data)[1]
+    lag_quarters <- (this_year - vintage_data$target_year[T]) * 4 + (this_quarter - vintage_data$target_quarter[T])
+
+    # Real-time gdp
+    gdp_rt <- vintage_data %>%
+      mutate(
+        gdp = gdp_growth,
+        gdp_lag0 = dplyr::lag(gdp_growth, lag_quarters),
+        gdp_lag1 = dplyr::lag(gdp_growth, lag_quarters + 1),
+        gdp_lag2 = dplyr::lag(gdp_growth, lag_quarters + 2),
+        gdp_lag3 = dplyr::lag(gdp_growth, lag_quarters + 3),
+        gdp_lag4 = dplyr::lag(gdp_growth, lag_quarters + 4)
+      ) %>%
+      filter(!is.na(gdp_lag4))
+    T_max <- dim(gdp_rt)[1]
+
+    gdp_latest <- vintage_data$gdp_growth[T]
+
+
+    # Adjust estimation sample size
+    ar_length <- min(ar_length, T_max-2)
+    rw_length <- min(rw_length, T_max)
+
+    # Direct forecasts AR(1)
+    ar_coeff <- lm(gdp[(T_max-ar_length+1):T_max] ~ gdp_lag0[(T_max-ar_length+1):T_max], data = gdp_rt)
+    fc_AR1$AR1_0[i] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
+
+    ar_coeff <- lm(gdp[(T_max-ar_length+1):T_max] ~ gdp_lag1[(T_max-ar_length+1):T_max], data = gdp_rt)
+    fc_AR1$AR1_1[i+1] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
+
+    ar_coeff <- lm(gdp[(T_max-ar_length+1):T_max] ~ gdp_lag2[(T_max-ar_length+1):T_max], data = gdp_rt)
+    fc_AR1$AR1_2[i+2] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
+
+    ar_coeff <- lm(gdp[(T_max-ar_length+1):T_max] ~ gdp_lag3[(T_max-ar_length+1):T_max], data = gdp_rt)
+    fc_AR1$AR1_3[i+3] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
+
+    ar_coeff <- lm(gdp[(T_max-ar_length+1):T_max] ~ gdp_lag4[(T_max-ar_length+1):T_max], data = gdp_rt)
+    fc_AR1$AR1_4[i+4] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
+
+    # Rolling window mean
+    fc_RWmean$RWmean_0[i] <- mean(gdp_rt$gdp[(T_max-rw_length+1):T_max])
+    fc_RWmean$RWmean_1[i+1] <- fc_RWmean$RWmean_0[i]
+    fc_RWmean$RWmean_2[i+2] <- fc_RWmean$RWmean_0[i]
+    fc_RWmean$RWmean_3[i+3] <- fc_RWmean$RWmean_0[i]
+    fc_RWmean$RWmean_4[i+4] <- fc_RWmean$RWmean_0[i]
+
+  }
+
+  Output <- list(
+    AR_fc     = fc_AR1,
+    RWmean_fc = fc_RWmean
+  )
+  return(Output)
+
+}
+
+test <- AR_benchmark()
+
+
 ##### Forecast evaluation
 rm(list = setdiff(ls(), c("spf_forecasts_cy", "spf_forecasts_ny",
-                          "evaluation_data_cy", "evaluation_data_ny")))
+                          "evaluation_data_cy", "evaluation_data_ny","rgdp_all")))
+
 
 # Evaluation data (CY versus NY)
-evaluation_data <- evaluation_data_cy %>%
+evaluation_data <- evaluation_data_cy
+
+evaluation_data <- evaluation_data %>%
   filter(!(is.na(spf_h0) | is.na(spf_h4)))
+
 
 # Exclude 2009 and 2010?
 # evaluation_data <- evaluation_data %>%
@@ -185,6 +302,9 @@ evaluation_data <- evaluation_data %>%
          fc_error_2 = gdp_growth - spf_h2,
          fc_error_3 = gdp_growth - spf_h3,
          fc_error_4 = gdp_growth - spf_h4)
+
+
+
 
 
 
@@ -249,6 +369,41 @@ print(results_table_mse)
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #### Here comes old evaluation code:
 
 ### Fit AR(1) in spirit of direct forecasting
@@ -258,7 +413,7 @@ ref_qtrs <- seq(as.yearqtr("2004 Q1", format = "%Y Q%q"), # Has to be correctly 
                 by = 0.25)
 
 # Convert to data frame with formatted ref_period
-forecasts_AR1 <- tibble(
+fc_AR1 <- tibble(
   ref_period = format(ref_qtrs, "%Y Q%q"),
   AR1_0 = NA_real_,
   AR1_1 = NA_real_,
@@ -267,28 +422,19 @@ forecasts_AR1 <- tibble(
   AR1_4 = NA_real_
 )
 
-forecasts_SPF_cy <- tibble(
+fc_RWmean <- tibble(
   ref_period = format(ref_qtrs, "%Y Q%q"),
-  SPF_cy_0 = NA_real_,
-  SPF_cy_1 = NA_real_,
-  SPF_cy_2 = NA_real_,
-  SPF_cy_3 = NA_real_,
-  SPF_cy_4 = NA_real_
-)
-
-forecasts_SPF_ny <- tibble(
-  ref_period = format(ref_qtrs, "%Y Q%q"),
-  SPF_ny_0 = NA_real_,
-  SPF_ny_1 = NA_real_,
-  SPF_ny_2 = NA_real_,
-  SPF_ny_3 = NA_real_,
-  SPF_ny_4 = NA_real_
+  AR1_0 = NA_real_,
+  AR1_1 = NA_real_,
+  AR1_2 = NA_real_,
+  AR1_3 = NA_real_,
+  AR1_4 = NA_real_
 )
 
 
 # Filter the relevant vintages
 vintages <- rgdp_all %>%
-  filter(origin_year >= 2004 & origin_year <= 2024, # Has to be correctly chosen!
+  filter(origin_year >= 2001 & origin_year <= 2024, # Has to be correctly chosen!
          origin_month %in% c(2, 5, 8, 11)) %>%
   distinct(origin_year, origin_month) %>%
   arrange(origin_year, origin_month)
