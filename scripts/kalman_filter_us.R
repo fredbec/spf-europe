@@ -300,8 +300,14 @@ log_likelihood_function_us <- function(rw, y, approx_err) {
 #' @param rgdp A numeric vector of observed quarterly real GDP growth rates.
 #' @param spf A numeric vector of SPF projections, annualized.
 #'
-#' @return A matrix with one column named \code{"SPF_implied"}, representing the
-#' smoothed latent forecast series from the state-space model.
+#' @return A list with the following components:
+#' \describe{
+#'   \item{SPF_filtered}{A matrix with one column named \code{"SPF_implied"},
+#'   representing the smoothed latent forecast series from the state-space model.}
+#'   \item{par_est}{A named numeric vector of estimated parameters
+#'   (\code{rw_sd}, \code{rw_us_sd}).}
+#'   \item{logLik}{The value of the log-likelihood at the optimum.}
+#' }
 #'
 #' @details Internally, this function:
 #' \itemize{
@@ -351,9 +357,17 @@ SPF_filter_us <- function(rgdp,spf,us_spf) {
   filtered_states <- kalman_filter_us(y, rw_sd = est_pars[1], rw_us_sd = est_pars[2],
                                       approx_err = 0.01, smooth = TRUE)
   SPF <- as.matrix(kalman_smoother_us(filtered_states)[,1])
-  colnames(SPF) <- "SPF_implied"
 
-  return(SPF)
+  # Define output of this function
+  colnames(SPF) <- "SPF_implied"
+  names(est_pars) <- c("rw_sd", "rw_us_sd")
+
+  Output <- list(
+    SPF_filtered = SPF,
+    par_est      = est_pars,
+    logLik       = est_par$value
+  )
+  return(Output)
 
 }
 

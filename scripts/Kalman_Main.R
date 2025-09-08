@@ -20,7 +20,8 @@ cat("\014")
 ##### Read in and merge SPF and RGDP data
 
 # Read in filtered quarterly SPF forecasts
-spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
+#spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
+spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead0.csv")
 
 # Read in real-time GDP
 rgdp_pre <- read.csv("data/revdatpre14.csv")
@@ -248,7 +249,7 @@ print(results_table_mse)
 
 
 
-#### Here comes olf evaluation code:
+#### Here comes old evaluation code:
 
 ### Fit AR(1) in spirit of direct forecasting
 
