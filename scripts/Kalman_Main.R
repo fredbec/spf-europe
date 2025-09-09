@@ -167,8 +167,8 @@ ggplot(plot_data_long, aes(x = ref_period, y = value, color = series)) +
 AR_benchmark = function() {
 
   # Benchmark models in real-time?
-  rw_length <- 10
-  ar_length <- 40
+  rw_length <- 8
+  ar_length <- 20
 
   ref_qtrs <- seq(as.yearqtr("2001 Q1", format = "%Y Q%q"), # Has to be correctly chosen!
                   as.yearqtr("2024 Q4", format = "%Y Q%q"), # Has to be correctly chosen!
@@ -176,7 +176,7 @@ AR_benchmark = function() {
 
   # Convert to data frame with formatted ref_period
   fc_AR1 <- tibble(
-    ref_period = format(ref_qtrs, "%Y Q%q"),
+    ref_period = as.yearqtr(ref_qtrs),
     AR1_0 = NA_real_,
     AR1_1 = NA_real_,
     AR1_2 = NA_real_,
@@ -185,7 +185,7 @@ AR_benchmark = function() {
   )
 
   fc_RWmean <- tibble(
-    ref_period = format(ref_qtrs, "%Y Q%q"),
+    ref_period = as.yearqtr(ref_qtrs),
     RWmean_0 = NA_real_,
     RWmean_1 = NA_real_,
     RWmean_2 = NA_real_,
@@ -273,20 +273,28 @@ AR_benchmark = function() {
 
 }
 
-test <- AR_benchmark()
+AR_bench <- AR_benchmark()
 
 
 ##### Forecast evaluation
-rm(list = setdiff(ls(), c("spf_forecasts_cy", "spf_forecasts_ny",
-                          "evaluation_data_cy", "evaluation_data_ny","rgdp_all")))
+rm(list = setdiff(ls(), c("rgdp_all","spf_forecasts_cy", "spf_forecasts_ny",
+                          "evaluation_data_cy", "evaluation_data_ny","AR_bench")))
 
-
-# Evaluation data (CY versus NY)
+# Evaluation data (CY versus NY) and benchmark models
 evaluation_data <- evaluation_data_cy
 
 evaluation_data <- evaluation_data %>%
+  left_join(AR_bench$AR_fc, by = "ref_period")
+
+evaluation_data <- evaluation_data %>%
+  left_join(AR_bench$RWmean_fc, by = "ref_period")
+
+# Drop missings
+evaluation_data <- evaluation_data %>%
   filter(!(is.na(spf_h0) | is.na(spf_h4)))
 
+evaluation_data <- evaluation_data %>%
+  filter(!(is.na(AR1_0) | is.na(AR1_4)))
 
 # Exclude 2009 and 2010?
 # evaluation_data <- evaluation_data %>%
@@ -297,21 +305,18 @@ evaluation_data <- evaluation_data %>%
 
 ## Forecast errors
 evaluation_data <- evaluation_data %>%
-  mutate(fc_error_0 = gdp_growth - spf_h0,
-         fc_error_1 = gdp_growth - spf_h1,
-         fc_error_2 = gdp_growth - spf_h2,
-         fc_error_3 = gdp_growth - spf_h3,
-         fc_error_4 = gdp_growth - spf_h4)
-
-
-
+  mutate(spf_fc_error_0 = gdp_growth - spf_h0,
+         spf_fc_error_1 = gdp_growth - spf_h1,
+         spf_fc_error_2 = gdp_growth - spf_h2,
+         spf_fc_error_3 = gdp_growth - spf_h3,
+         spf_fc_error_4 = gdp_growth - spf_h4)
 
 
 
 ### Unbiased
 results <- lapply(0:4, function(h) {
   # Get formula as string and evaluate
-  formula <- as.formula(paste0("fc_error_", h, " ~ 1"))
+  formula <- as.formula(paste0("spf_fc_error_", h, " ~ 1"))
 
   # Fit regression
   model <- lm(formula, data = evaluation_data)
@@ -340,23 +345,34 @@ gdp_mean <- mean(evaluation_data$gdp_growth, na.rm = TRUE)
 # Loop over h = 0 to 4
 error_stats <- lapply(0:4, function(h) {
   actual <- evaluation_data$gdp_growth
-  spf_forecast_error <- evaluation_data[[paste0("fc_error_", h)]]
 
-  # Compute SPF errors
+  # Compute SPF and benchmark errors
+  spf_forecast_error <- evaluation_data[[paste0("spf_fc_error_", h)]]
+  benchmark_error <- actual - gdp_mean
+  ar1_forecast_error <- evaluation_data[[paste0("AR1_", h)]]
+  RWmean_forecast_error <- evaluation_data[[paste0("RWmean_", h)]]
+
+  # Compute mse and mae
   spf_mse <- mean((spf_forecast_error)^2, na.rm = TRUE)
   spf_mae <- mean(abs(spf_forecast_error), na.rm = TRUE)
-
-  # Compute benchmark errors: actual - historical mean
-  benchmark_error <- actual - gdp_mean
   hist_mean_mse <- mean((benchmark_error)^2, na.rm = TRUE)
   hist_mean_mae <- mean(abs(benchmark_error), na.rm = TRUE)
+  AR1_mean_mse <- mean((ar1_forecast_error)^2, na.rm = TRUE)
+  AR1_mean_mae <- mean(abs(ar1_forecast_error), na.rm = TRUE)
+  RW_mean_mse <- mean((RWmean_forecast_error)^2, na.rm = TRUE)
+  RW_mean_mae <- mean(abs(RWmean_forecast_error), na.rm = TRUE)
+
 
   tibble(
     horizon = h,
     spf_mse = spf_mse,
-    spf_mae = spf_mae,
+    #spf_mae = spf_mae,
     hist_mean_mse = hist_mean_mse,
-    hist_mean_mae = hist_mean_mae
+    #hist_mean_mae = hist_mean_mae,
+    RW_mean_mse = RW_mean_mse,
+    #RW_mean_mae = RW_mean_mae,
+    AR1_mean_mse = AR1_mean_mse#,
+    #AR1_mean_mae = AR1_mean_mae
   )
 })
 
