@@ -12,16 +12,20 @@ library(sandwich)   # For Newey-West standard errors
 library(lmtest)     # For coeftest()
 library(tibble)     # For tibble-based output
 
-
-
 rm(list = ls())
 cat("\014")
+
+
+
+# Implemented functions
+source(here("scripts", "AR_benchmark.R"))
+
 
 ##### Read in and merge SPF and RGDP data
 
 # Read in filtered quarterly SPF forecasts
-#spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
-spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead0.csv")
+spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
+#spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead1.csv")
 
 # Read in real-time GDP
 rgdp_pre <- read.csv("data/revdatpre14.csv")
@@ -31,6 +35,15 @@ rgdp_post <- read.csv("data/revdatpost14.csv")
 rgdp_pre <- rgdp_pre[ - which(rgdp_pre$origin_year == 2014 & rgdp_pre$origin_month > 9), ]
 rgdp_pre$origin_day <- NA
 rgdp_all <- rbind(rgdp_pre,rgdp_post)
+
+# Compute quarterly GDP growth rates
+rgdp_all <- rgdp_all %>%
+  arrange(origin_year, origin_month, target_year, target_quarter) %>%  # ensure correct order
+  group_by(origin_year, origin_month) %>%
+  mutate(
+    gdp_growth = ( (rgdp / lag(rgdp) ) ^ 4 - 1) * 100,
+  ) %>%
+  ungroup()
 
 
 ### Filtered SPF h = 0, 1, ..., 4 step ahead forecasts
@@ -80,15 +93,6 @@ spf_forecasts_ny <- spf_data %>%
 
 # First or second release of RGDP as actuals
 release <- 2
-
-# Compute quarterly GDP growth rates
-rgdp_all <- rgdp_all %>%
-  arrange(origin_year, origin_month, target_year, target_quarter) %>%  # ensure correct order
-  group_by(origin_year, origin_month) %>%
-  mutate(
-    gdp_growth = ( (rgdp / lag(rgdp) ) ^ 4 - 1) * 100,
-  ) %>%
-  ungroup()
 
 # Keep second releases
 rgdp <- rgdp_all %>%
@@ -163,117 +167,9 @@ ggplot(plot_data_long, aes(x = ref_period, y = value, color = series)) +
 
 
 
-### Should go into a function
-AR_benchmark = function() {
-
-  # Benchmark models in real-time?
-  rw_length <- 8
-  ar_length <- 20
-
-  ref_qtrs <- seq(as.yearqtr("2001 Q1", format = "%Y Q%q"), # Has to be correctly chosen!
-                  as.yearqtr("2024 Q4", format = "%Y Q%q"), # Has to be correctly chosen!
-                  by = 0.25)
-
-  # Convert to data frame with formatted ref_period
-  fc_AR1 <- tibble(
-    ref_period = as.yearqtr(ref_qtrs),
-    AR1_0 = NA_real_,
-    AR1_1 = NA_real_,
-    AR1_2 = NA_real_,
-    AR1_3 = NA_real_,
-    AR1_4 = NA_real_
-  )
-
-  fc_RWmean <- tibble(
-    ref_period = as.yearqtr(ref_qtrs),
-    RWmean_0 = NA_real_,
-    RWmean_1 = NA_real_,
-    RWmean_2 = NA_real_,
-    RWmean_3 = NA_real_,
-    RWmean_4 = NA_real_,
-  )
 
 
-  # Filter the relevant vintages
-  vintages <- rgdp_all %>%
-    filter(origin_year >= 2001 & origin_year <= 2024, # Has to be correctly chosen!
-           origin_month %in% c(2, 5, 8, 11)) %>%
-    distinct(origin_year, origin_month) %>%
-    arrange(origin_year, origin_month)
-
-
-  # Loop over each vintage
-  for (i in seq_len(nrow(vintages) - 4)) {
-    this_year <- vintages$origin_year[i]
-    this_month <- vintages$origin_month[i]
-    this_quarter <- floor(this_month / 3) + 1
-
-    # Read out vintage
-    vintage_data <- rgdp_all %>% filter(origin_year == this_year, origin_month == this_month)
-    vintage_data <- vintage_data[-1, ]
-
-    # Merge SPF to vintages
-    vintage_data <- vintage_data %>%
-      mutate(merge_date = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q") )
-
-    # Lag order
-    T <- dim(vintage_data)[1]
-    lag_quarters <- (this_year - vintage_data$target_year[T]) * 4 + (this_quarter - vintage_data$target_quarter[T])
-
-    # Real-time gdp
-    gdp_rt <- vintage_data %>%
-      mutate(
-        gdp = gdp_growth,
-        gdp_lag0 = dplyr::lag(gdp_growth, lag_quarters),
-        gdp_lag1 = dplyr::lag(gdp_growth, lag_quarters + 1),
-        gdp_lag2 = dplyr::lag(gdp_growth, lag_quarters + 2),
-        gdp_lag3 = dplyr::lag(gdp_growth, lag_quarters + 3),
-        gdp_lag4 = dplyr::lag(gdp_growth, lag_quarters + 4)
-      ) %>%
-      filter(!is.na(gdp_lag4))
-    T_max <- dim(gdp_rt)[1]
-
-    gdp_latest <- vintage_data$gdp_growth[T]
-
-
-    # Adjust estimation sample size
-    ar_length <- min(ar_length, T_max-2)
-    rw_length <- min(rw_length, T_max)
-
-    # Direct forecasts AR(1)
-    ar_coeff <- lm(gdp[(T_max-ar_length+1):T_max] ~ gdp_lag0[(T_max-ar_length+1):T_max], data = gdp_rt)
-    fc_AR1$AR1_0[i] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
-
-    ar_coeff <- lm(gdp[(T_max-ar_length+1):T_max] ~ gdp_lag1[(T_max-ar_length+1):T_max], data = gdp_rt)
-    fc_AR1$AR1_1[i+1] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
-
-    ar_coeff <- lm(gdp[(T_max-ar_length+1):T_max] ~ gdp_lag2[(T_max-ar_length+1):T_max], data = gdp_rt)
-    fc_AR1$AR1_2[i+2] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
-
-    ar_coeff <- lm(gdp[(T_max-ar_length+1):T_max] ~ gdp_lag3[(T_max-ar_length+1):T_max], data = gdp_rt)
-    fc_AR1$AR1_3[i+3] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
-
-    ar_coeff <- lm(gdp[(T_max-ar_length+1):T_max] ~ gdp_lag4[(T_max-ar_length+1):T_max], data = gdp_rt)
-    fc_AR1$AR1_4[i+4] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
-
-    # Rolling window mean
-    fc_RWmean$RWmean_0[i] <- mean(gdp_rt$gdp[(T_max-rw_length+1):T_max])
-    fc_RWmean$RWmean_1[i+1] <- fc_RWmean$RWmean_0[i]
-    fc_RWmean$RWmean_2[i+2] <- fc_RWmean$RWmean_0[i]
-    fc_RWmean$RWmean_3[i+3] <- fc_RWmean$RWmean_0[i]
-    fc_RWmean$RWmean_4[i+4] <- fc_RWmean$RWmean_0[i]
-
-  }
-
-  Output <- list(
-    AR_fc     = fc_AR1,
-    RWmean_fc = fc_RWmean
-  )
-  return(Output)
-
-}
-
-AR_bench <- AR_benchmark()
+AR_bench <- AR_benchmark(rgdp_all)
 
 
 ##### Forecast evaluation
@@ -297,8 +193,8 @@ evaluation_data <- evaluation_data %>%
   filter(!(is.na(AR1_0) | is.na(AR1_4)))
 
 # Exclude 2009 and 2010?
-# evaluation_data <- evaluation_data %>%
-#  filter(!(target_year %in% c(2009, 2010)))
+ evaluation_data <- evaluation_data %>%
+  filter(!(target_year %in% c(2009, 2010)))
 
 evaluation_data <- evaluation_data %>%
   filter(target_year < 2020 & target_year > 2000)
@@ -382,18 +278,7 @@ results_table_mse <- bind_rows(error_stats)
 print(results_table_bias)
 print(results_table_mse)
 
-
-
-
-
-
-
-
-
-
-
-
-
+test
 
 
 
