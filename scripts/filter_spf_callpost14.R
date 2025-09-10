@@ -85,6 +85,7 @@ combs <- CJ(year = years,
             quarter = quarters)
 
 res_spf_filter <- vector(mode = "list", length = nrow(combs))
+res_spf_additionalinfo <- vector(mode = "list", length = nrow(combs))
 
 #without US SPF
 for(i in 1:nrow(combs)){
@@ -94,19 +95,30 @@ for(i in 1:nrow(combs)){
   cqu <- cissue$quarter
   cyr <- cissue$year
 
-  res_spf_filter[[i]] <- filter_dat(current_quarter = cqu,
-                                    current_year = cyr,
-                                    SPF_data = spfdat,
-                                    real_time_data = rtd,
-                                    rtd_issue = "latest_vintage")
+  res <- filter_dat(current_quarter = cqu,
+                    current_year = cyr,
+                    SPF_data = spfdat,
+                    real_time_data = rtd,
+                    rtd_issue = "latest_vintage")
+
+  res_spf_filter[[i]] <- res$spf_filter_dat
+  res_spf_additionalinfo[[i]] <- data.table(origin_quarter = cqu,
+                                            origin_year = cyr,
+                                            cy_logLik = res$ll["cy"],
+                                            cyandny_logLik = res$ll["cyandny"],
+                                            cy_rw_sd = res$params$cy["rw_sd"],
+                                            cyandny_rw_sd = res$params$cyandny["rw_sd"])
 }
 
 res_spf_filter <- rbindlist(res_spf_filter)
+res_spf_additionalinfo <- rbindlist(res_spf_additionalinfo)
 
 data.table::fwrite(res_spf_filter, here("data", "filter_spf_data_medianfc.csv"))
+data.table::fwrite(res_spf_additionalinfo, here("data", "filter_spf_data_medianfc_supplementary.csv"))
 
 
 res_spf_filter <- vector(mode = "list", length = nrow(combs))
+res_spf_additionalinfo <- vector(mode = "list", length = nrow(combs))
 
 #with US SPF, "latest"
 for(i in 1:nrow(combs)){
@@ -116,21 +128,36 @@ for(i in 1:nrow(combs)){
   cqu <- cissue$quarter
   cyr <- cissue$year
 
-  res_spf_filter[[i]] <- filter_dat(current_quarter = cqu,
-                                    current_year = cyr,
-                                    SPF_data = spfdat,
-                                    real_time_data = rtd,
-                                    SPF_data_US = SPF_dataUS,
-                                    release_US_SPF = "latest",
-                                    rtd_issue = "latest_vintage")
+  res <- filter_dat(current_quarter = cqu,
+                    current_year = cyr,
+                    SPF_data = spfdat,
+                    real_time_data = rtd,
+                    SPF_data_US = SPF_dataUS,
+                    release_US_SPF = "latest",
+                    rtd_issue = "latest_vintage")
+
+
+
+  res_spf_filter[[i]] <- res$spf_filter_dat
+  res_spf_additionalinfo[[i]] <- data.table(origin_quarter = cqu,
+                                          origin_year = cyr,
+                                          cy_logLik = res$ll["cy"],
+                                          cyandny_logLik = res$ll["cyandny"],
+                                          cy_rw_sd = res$params$cy["rw_sd"],
+                                          cyandny_rw_sd = res$params$cyandny["rw_sd"],
+                                          cy_rw_us_sd = res$params$cy["rw_us_sd"],
+                                          cyandny_rw_us_sd = res$params$cyandny["rw_us_sd"])
 }
 
 res_spf_filter <- rbindlist(res_spf_filter)
+res_spf_additionalinfo <- rbindlist(res_spf_additionalinfo)
 
 data.table::fwrite(res_spf_filter, here("data", "filter_spf_data_medianfc_withus.csv"))
+data.table::fwrite(res_spf_additionalinfo, here("data", "filter_spf_data_medianfc_withus_supplementary.csv"))
 #with US SPF, fixed release
 for(rel_hor in 0:3){
   res_spf_filter <- vector(mode = "list", length = nrow(combs))
+  res_spf_additionalinfo <- vector(mode = "list", length = nrow(combs))
   for(i in 1:nrow(combs)){
 
     cissue <- combs[i,]
@@ -138,17 +165,31 @@ for(rel_hor in 0:3){
     cqu <- cissue$quarter
     cyr <- cissue$year
     print(cissue)
-    res_spf_filter[[i]] <- filter_dat(current_quarter = cqu,
-                                      current_year = cyr,
-                                      SPF_data = spfdat,
-                                      real_time_data = rtd,
-                                      SPF_data_US = SPF_dataUS,
-                                      release_US_SPF = rel_hor,
-                                      rtd_issue = "latest_vintage")
+    res <- filter_dat(current_quarter = cqu,
+                      current_year = cyr,
+                      SPF_data = spfdat,
+                      real_time_data = rtd,
+                      SPF_data_US = SPF_dataUS,
+                      release_US_SPF = rel_hor,
+                      rtd_issue = "latest_vintage")
+
+    res_spf_filter[[i]] <- res$spf_filter_dat
+    res_spf_additionalinfo[[i]] <- data.table(origin_quarter = cqu,
+                                              origin_year = cyr,
+                                              cy_logLik = res$ll["cy"],
+                                              cyandny_logLik = res$ll["cyandny"],
+                                              cy_rw_sd = res$params$cy["rw_sd"],
+                                              cyandny_rw_sd = res$params$cyandny["rw_sd"],
+                                              cy_rw_us_sd = res$params$cy["rw_us_sd"],
+                                              cyandny_rw_us_sd = res$params$cyandny["rw_us_sd"])
   }
 
   res_spf_filter <- rbindlist(res_spf_filter)
+  res_spf_additionalinfo <- rbindlist(res_spf_additionalinfo)
+
 
   data.table::fwrite(res_spf_filter, here("data", paste0("filter_spf_data_medianfc_withus_stepahead", rel_hor,  ".csv")))
+  data.table::fwrite(res_spf_additionalinfo, here("data", paste0("filter_spf_data_medianfc_withus_stepahead", rel_hor,  "_supplementary.csv")))
+
 }
 

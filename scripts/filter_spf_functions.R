@@ -166,12 +166,14 @@ filter_dat <- function(current_quarter,
   }
 
   if(is.null(SPF_data_US)){
-    spf_filter_vals_cy <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc)
-    spf_filter_vals_cyandny <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc)
+    cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc)
+    spf_filter_vals_cy <- cyres$SPF_filtered
+    cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc)
+    spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
   } else {
     #following code is a bit adhoc, since there was an error in the instance 2018Q1
     #with the Cholesky decomposition
-    spf_filter_vals_cy <- tryCatch(
+    cyres <- tryCatch(
       {
         SPF_filter_us(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
       },
@@ -182,8 +184,10 @@ filter_dat <- function(current_quarter,
         SPF_filter_us(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
       }
     )
+    spf_filter_vals_cy <- cyres$SPF_filtered
     #spf_filter_vals_cyandny <- spf_filter_vals_cy
-    spf_filter_vals_cyandny <- SPF_filter_us(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, data_filter_cyandny$rgdp_growth_usspf)
+    cyandnyres <- SPF_filter_us(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, data_filter_cyandny$rgdp_growth_usspf)
+    spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
   }
 
   #make spf_filter_dat (take target columns from data_filter_cyandny)
@@ -194,7 +198,7 @@ filter_dat <- function(current_quarter,
     DT(, origin_quarter := current_quarter) |>
     DT(, origin_year := current_year)
 
-  return(spf_filter_dat)
+  return(list(spf_filter_dat = spf_filter_dat, ll = c(cy = cyres$logLik, cyandny = cyandnyres$logLik), params = list(cy = cyres$par_est, cyandny=cyandnyres$par_est)))
 
 }
 
