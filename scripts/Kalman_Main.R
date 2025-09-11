@@ -16,16 +16,11 @@ rm(list = ls())
 cat("\014")
 
 
-
-# Implemented functions
-source(here("scripts", "AR_benchmark.R"))
-
-
 ##### Read in and merge SPF and RGDP data
 
 # Read in filtered quarterly SPF forecasts
-spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
-#spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead1.csv")
+#spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
+spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead0.csv")
 
 # Read in real-time GDP
 rgdp_pre <- read.csv("data/revdatpre14.csv")
@@ -92,7 +87,7 @@ spf_forecasts_ny <- spf_data %>%
 ### Actuals of RGDP
 
 # First or second release of RGDP as actuals
-release <- 2
+release <- 1
 
 # Keep second releases
 rgdp <- rgdp_all %>%
@@ -168,19 +163,26 @@ ggplot(plot_data_long, aes(x = ref_period, y = value, color = series)) +
 
 
 
-
-AR_bench <- AR_benchmark(rgdp_all)
-
-
 ##### Forecast evaluation
 rm(list = setdiff(ls(), c("rgdp_all","spf_forecasts_cy", "spf_forecasts_ny",
-                          "evaluation_data_cy", "evaluation_data_ny","AR_bench")))
+                          "evaluation_data_cy", "evaluation_data_ny")))
+
+# AR Benchmark models
+source(here("scripts", "AR_benchmark.R"))
+AR_bench <- AR_benchmark(rgdp_all, ar_length = 30,
+                         rw_length = 1,
+                         max_lag = 4,
+                         SampleEnd = 2026)
+
 
 # Evaluation data (CY versus NY) and benchmark models
 evaluation_data <- evaluation_data_cy
 
 evaluation_data <- evaluation_data %>%
-  left_join(AR_bench$AR_fc, by = "ref_period")
+  left_join(AR_bench$DAR_fc, by = "ref_period")
+
+evaluation_data <- evaluation_data %>%
+  left_join(AR_bench$IAR_fc, by = "ref_period")
 
 evaluation_data <- evaluation_data %>%
   left_join(AR_bench$RWmean_fc, by = "ref_period")
@@ -190,11 +192,11 @@ evaluation_data <- evaluation_data %>%
   filter(!(is.na(spf_h0) | is.na(spf_h4)))
 
 evaluation_data <- evaluation_data %>%
-  filter(!(is.na(AR1_0) | is.na(AR1_4)))
+  filter(!(is.na(DAR_h0) | is.na(DAR_h4)))
 
 # Exclude 2009 and 2010?
- evaluation_data <- evaluation_data %>%
-  filter(!(target_year %in% c(2009, 2010)))
+# evaluation_data <- evaluation_data %>%
+#  filter(!(target_year %in% c(2009, 2010)))
 
 evaluation_data <- evaluation_data %>%
   filter(target_year < 2020 & target_year > 2000)
@@ -245,16 +247,19 @@ error_stats <- lapply(0:4, function(h) {
   # Compute SPF and benchmark errors
   spf_forecast_error <- evaluation_data[[paste0("spf_fc_error_", h)]]
   benchmark_error <- actual - gdp_mean
-  ar1_forecast_error <- evaluation_data[[paste0("AR1_", h)]]
-  RWmean_forecast_error <- evaluation_data[[paste0("RWmean_", h)]]
+  dar_forecast_error <- evaluation_data[[paste0("DAR_h", h)]]
+  iar_forecast_error <- evaluation_data[[paste0("IAR_h", h)]]
+  RWmean_forecast_error <- evaluation_data[[paste0("RWmean_h", h)]]
 
   # Compute mse and mae
   spf_mse <- mean((spf_forecast_error)^2, na.rm = TRUE)
   spf_mae <- mean(abs(spf_forecast_error), na.rm = TRUE)
   hist_mean_mse <- mean((benchmark_error)^2, na.rm = TRUE)
   hist_mean_mae <- mean(abs(benchmark_error), na.rm = TRUE)
-  AR1_mean_mse <- mean((ar1_forecast_error)^2, na.rm = TRUE)
-  AR1_mean_mae <- mean(abs(ar1_forecast_error), na.rm = TRUE)
+  DAR_mean_mse <- mean((dar_forecast_error)^2, na.rm = TRUE)
+  DAR_mean_mae <- mean(abs(dar_forecast_error), na.rm = TRUE)
+  IAR_mean_mse <- mean((iar_forecast_error)^2, na.rm = TRUE)
+  IAR_mean_mae <- mean(abs(iar_forecast_error), na.rm = TRUE)
   RW_mean_mse <- mean((RWmean_forecast_error)^2, na.rm = TRUE)
   RW_mean_mae <- mean(abs(RWmean_forecast_error), na.rm = TRUE)
 
@@ -267,8 +272,10 @@ error_stats <- lapply(0:4, function(h) {
     #hist_mean_mae = hist_mean_mae,
     RW_mean_mse = RW_mean_mse,
     #RW_mean_mae = RW_mean_mae,
-    AR1_mean_mse = AR1_mean_mse#,
-    #AR1_mean_mae = AR1_mean_mae
+    DAR_mean_mse = DAR_mean_mse,
+    #AR1_mean_mae = DAR_mean_mae,
+    IAR_mean_mse = IAR_mean_mse#,
+    #IAR1_mean_mae = IAR_mean_mae
   )
 })
 

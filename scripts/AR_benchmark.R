@@ -1,44 +1,82 @@
-
-
-
-
-
-AR_benchmark = function(rgdp_all) {
-
-  # Input to function
-  rw_length <- 8
-  ar_length <- 30
-  SampleEnd <- 2026
-  max_lag   <- 4
+#' AR Benchmark Forecasts for Real-Time GDP
+#'
+#' Computes real-time forecasts of GDP using:
+#'   - Direct AR (DAR) models with horizon-specific lag selection,
+#'   - Indirect AR (IAR) models (iterated AR forecasts),
+#'   - Rolling-window mean (RWmean) benchmarks.
+#'
+#' Forecasts are computed for horizons h = 0,...,4 and stored in separate tibbles.
+#'
+#' @param rgdp A data.frame or tibble containing real-time GDP vintages with at least:
+#'   \itemize{
+#'     \item{origin_year, origin_month}{vintage date of release}
+#'     \item{target_year, target_quarter}{observation period}
+#'     \item{gdp_growth}{GDP growth series}
+#'   }
+#' @param ar_length Integer. Length of the rolling window for AR estimation.
+#' @param rw_length Integer. Length of the rolling window for the rolling mean benchmark.
+#' @param max_lag Integer. Maximum lag length considered for AR models.
+#' @param SampleEnd Numeric or integer. Last year of the evaluation sample.
+#'
+#' @return A list with three elements:
+#'   \item{DAR_fc}{Tibble of direct AR forecasts for h = 0,...,4}
+#'   \item{IAR_fc}{Tibble of iterated AR forecasts for h = 0,...,4}
+#'   \item{RWmean_fc}{Tibble of rolling-window mean forecasts for h = 0,...,4}
+#'
+#' @examples
+#' \dontrun{
+#' # Suppose rgdp_data is a tibble with the required columns
+#' forecasts <- AR_benchmark(
+#'   rgdp = rgdp_data,
+#'   ar_length = 30,
+#'   rw_length = 10,
+#'   max_lag = 4,
+#'   SampleEnd = 2019
+#' )
+#' head(forecasts$DAR_fc)
+#' head(forecasts$IAR_fc)
+#' head(forecasts$RWmean_fc)
+#' }
+#' #'
+#' @export
+AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
 
   # Specify evaluation sample
   ref_qtrs <- seq(as.yearqtr("2001 Q1", format = "%Y Q%q"), # Has to be correctly chosen!
                   as.yearqtr(SampleEnd + 0.75, format = "%Y Q%q"),
                   by = 0.25)
 
-  # Convert to data frame with formatted ref_period
-  fc_AR1 <- tibble(
+  # Set up matrices to store real-time forecasts
+  fc_DAR <- tibble(
     ref_period = as.yearqtr(ref_qtrs),
-    AR1_0 = NA_real_,
-    AR1_1 = NA_real_,
-    AR1_2 = NA_real_,
-    AR1_3 = NA_real_,
-    AR1_4 = NA_real_
+    DAR_h0 = NA_real_,
+    DAR_h1 = NA_real_,
+    DAR_h2 = NA_real_,
+    DAR_h3 = NA_real_,
+    DAR_h4 = NA_real_
+  )
+
+  fc_IAR <- tibble(
+    ref_period = as.yearqtr(ref_qtrs),
+    IAR_h0 = NA_real_,
+    IAR_h1 = NA_real_,
+    IAR_h2 = NA_real_,
+    IAR_h3 = NA_real_,
+    IAR_h4 = NA_real_
   )
 
   fc_RWmean <- tibble(
     ref_period = as.yearqtr(ref_qtrs),
-    RWmean_0 = NA_real_,
-    RWmean_1 = NA_real_,
-    RWmean_2 = NA_real_,
-    RWmean_3 = NA_real_,
-    RWmean_4 = NA_real_,
+    RWmean_h0 = NA_real_,
+    RWmean_h1 = NA_real_,
+    RWmean_h2 = NA_real_,
+    RWmean_h3 = NA_real_,
+    RWmean_h4 = NA_real_,
   )
 
-
   # Filter the relevant vintages
-  vintages <- rgdp_all %>%
-    filter(origin_year >= 2001 & origin_year <= SampleEnd, # Has to be correctly chosen!
+  vintages <- rgdp %>%
+    filter(origin_year >= 2001 & origin_year <= SampleEnd, # starts in 2001
            origin_month %in% c(2, 5, 8, 11)) %>%
     distinct(origin_year, origin_month) %>%
     arrange(origin_year, origin_month)
@@ -51,7 +89,7 @@ AR_benchmark = function(rgdp_all) {
     this_quarter <- floor(this_month / 3) + 1
 
     # Read out vintage
-    vintage_data <- rgdp_all %>% filter(origin_year == this_year, origin_month == this_month)
+    vintage_data <- rgdp %>% filter(origin_year == this_year, origin_month == this_month)
     vintage_data <- vintage_data[-1, ]
 
     # Merge SPF to vintages
@@ -63,13 +101,13 @@ AR_benchmark = function(rgdp_all) {
     lag_quarters <- (this_year - vintage_data$target_year[T]) * 4 + (this_quarter - vintage_data$target_quarter[T])
 
     # Real-time GDP (latest vintage) and lags for direct forecasting
+    max_lag <- max(1, min(max_lag, T - 20) )
     gdp_rt <- .make_lagged_dataset(vintage_data, lag_quarters, max_lag)
     T_max <- dim(gdp_rt)[1]
 
-
     # Latest observation(s) to forecast GDP_(t+h)
     max_lag <- min(max_lag, T_max)
-    gdp_latest <- vintage_data$gdp_growth[(T-max_lag+1):T]
+    gdp_latest <- rev(vintage_data$gdp_growth[(T-max_lag+1):T])
 
     # Adjust estimation sample size
     rw_length <- min(rw_length, T_max)
@@ -77,50 +115,80 @@ AR_benchmark = function(rgdp_all) {
     gdp_rt <- gdp_rt[(T_max-ar_length+1):T_max, ]
 
 
+    ### Direct forecasts DAR(p)
+
     # Chose optimal lag length according to BIC for IAR and DAR
+    lagLenghts <- .BIC_select(gdp_rt,4)
+    lags <- lagLenghts$BIC_direct
 
-    # function
-    #BIC_select = function(gdp_rt,max_lag) {
+    for (h in 0:4) {
+      # Set up DAR model
+      m <- lags[h+1]
+      predictors <- paste0("gdp_dlag", h:(h + (m-1) ))
+      formula <- as.formula(paste("gdp ~", paste(predictors, collapse = " + ")))
 
-      # Input to function
-    #  gdp = gdp_rt
-    #  maxLag = max_lag
+      # Estimate OLS
+      ar_coeff <- lm(formula, data = gdp_rt)
 
-      ## Indirect Autoregressive Model
-      # Lag length for nowcast h+0
-    #  lm(gdp ~ gdp_dlag0, data = gdp)
-    #}
+      # Forecast h steps ahead
+      col_name <- paste0("DAR_h", h)
+      fc_DAR[[col_name]][i+h] <- coefficients(ar_coeff) %*% t(cbind(1, t(gdp_latest[1:m])))
 
-
+    }
 
 
-    # Direct forecasts AR(1)
-    ar_coeff <- lm(gdp ~ gdp_dlag0, data = gdp_rt)
-    fc_AR1$AR1_0[i] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
+    ### Indirect forecasts DAR(p)
 
-    ar_coeff <- lm(gdp ~ gdp_dlag1, data = gdp_rt)
-    fc_AR1$AR1_1[i+1] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
+    # Set up IAR model
+    lags <- lagLenghts$BIC_indirect
+    predictors <- paste0("gdp_lag", 1:lags )
+    formula <- as.formula(paste("gdp ~", paste(predictors, collapse = " + ")))
 
-    ar_coeff <- lm(gdp ~ gdp_dlag2, data = gdp_rt)
-    fc_AR1$AR1_2[i+2] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
+    # Estimate OLS
+    ar_coeff <- lm(formula, data = gdp_rt)
 
-    ar_coeff <- lm(gdp ~ gdp_dlag3, data = gdp_rt)
-    fc_AR1$AR1_3[i+3] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
+    # Forecast h steps ahead
 
-    ar_coeff <- lm(gdp ~ gdp_dlag4, data = gdp_rt)
-    fc_AR1$AR1_4[i+4] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
+    # Initialize latest observed values for IAR
+    gdp_latest_iar <- gdp_latest[1:lags]
 
-    # Rolling window mean
-    fc_RWmean$RWmean_0[i] <- mean(gdp_rt$gdp[(T_max-rw_length+1):T_max])
-    fc_RWmean$RWmean_1[i+1] <- fc_RWmean$RWmean_0[i]
-    fc_RWmean$RWmean_2[i+2] <- fc_RWmean$RWmean_0[i]
-    fc_RWmean$RWmean_3[i+3] <- fc_RWmean$RWmean_0[i]
-    fc_RWmean$RWmean_4[i+4] <- fc_RWmean$RWmean_0[i]
+    # Pre-iterate lag_quarters - 1 times
+    if (lag_quarters > 1) {
+      for (pre_h in 1:(lag_quarters - 1)) {
+        y_hat_pre <- sum(coefficients(ar_coeff) * c(1, gdp_latest_iar))
+        gdp_latest_iar <- c(y_hat_pre, head(gdp_latest_iar, lags - 1))
+      }
+    }
+
+    for (h in 0:4) {
+
+      # Prepare vector of predictors
+      x_vec <- c(1, gdp_latest_iar)
+
+      # Compute forecast
+      y_hat <- sum(coefficients(ar_coeff) * x_vec)
+
+      # Store forecast
+      col_name <- paste0("IAR_h", h)
+      fc_IAR[[col_name]][i+h] <- y_hat
+
+      # Update gdp_latest to include this forecast for next iteration
+      gdp_latest_iar <- c(y_hat, head(gdp_latest_iar, lags - 1))
+    }
+
+
+    ### Rolling window mean
+    fc_RWmean$RWmean_h0[i] <- mean(gdp_rt$gdp[(T_max-rw_length+1):T_max])
+    fc_RWmean$RWmean_h1[i+1] <- fc_RWmean$RWmean_h0[i]
+    fc_RWmean$RWmean_h2[i+2] <- fc_RWmean$RWmean_h0[i]
+    fc_RWmean$RWmean_h3[i+3] <- fc_RWmean$RWmean_h0[i]
+    fc_RWmean$RWmean_h4[i+4] <- fc_RWmean$RWmean_h0[i]
 
   }
 
   Output <- list(
-    AR_fc     = fc_AR1,
+    DAR_fc     = fc_DAR,
+    IAR_fc     = fc_IAR,
     RWmean_fc = fc_RWmean
   )
   return(Output)
@@ -129,26 +197,35 @@ AR_benchmark = function(rgdp_all) {
 
 
 
-
-
-
-
-
+#' Create lagged dataset for direct and indirect forecasting
+#'
+#' Constructs a data frame with all necessary lagged variables for
+#' direct (DAR) and indirect (IAR) forecasting. Direct lags are created
+#' for horizons h = 0,...,4 plus additional lags up to `max_lag` for the last horizon.
+#' Indirect lags are created from 1 to `max_lag` for iterative AR forecasting.
+#'
+#' @param vintage_data A data.frame or tibble containing at least `gdp_growth`.
+#' @param lag_quarters Number of quarters to shift for the first direct lag.
+#' @param max_lag Maximum lag length to construct.
+#' @return A data.frame with:
+#'   \item{gdp}{Original series from `gdp_growth`}
+#'   \item{gdp_dlag0,...,gdp_dlagN}{Lagged variables for DAR}
+#'   \item{gdp_lag1,...,gdp_lagM}{Lagged variables for IAR}
 
 .make_lagged_dataset <- function(vintage_data, lag_quarters, max_lag) {
 
-  # base variable
+  # Base variable
   df <- vintage_data %>%
     mutate(gdp = gdp_growth)
 
-  # Direct lags: from h = 0 up to h = 4, plus up to max_lag extra for horizon h=4
-  direct_lags <- map_dfc(
+  # Direct lags: from h = 0 up to h = 4, plus up to max_lag extra for horizon h = 4
+  direct_lags <- purrr::map_dfc(
     set_names(0:(4 + max_lag-1), paste0("gdp_dlag", 0:(4 + max_lag-1))),
     ~ lag(df$gdp_growth, lag_quarters + .x)
   )
 
   # IAR lags: from 1 to max_lag
-  iar_lags <- map_dfc(
+  iar_lags <- purrr::map_dfc(
     set_names(1:max_lag, paste0("gdp_lag", 1:max_lag)),
     ~ lag(df$gdp_growth, .x)
   )
@@ -159,3 +236,85 @@ AR_benchmark = function(rgdp_all) {
 
   return(out)
 }
+
+
+
+#' Compute optimal lag lengths for DAR and IAR models
+#'
+#' Computes BIC and AIC to select the best lag length for:
+#'  - Direct AR models (DAR) across horizons h = 0,...,4
+#'  - Indirect AR models (IAR)
+#'
+#' @param gdp A data.frame containing `gdp` and lagged columns `gdp_dlag0`, `gdp_dlag1`, ...
+#' @param maxLag Maximum number of lags to consider
+#' @return A list with BIC and AIC optimal lags for direct and indirect models
+
+.BIC_select = function(gdp,maxLag) {
+
+  # Sample size
+  T <- dim(gdp)[1]
+
+  ### Direct forecasting (DAR)
+  BIC_dir <- matrix(NA_real_, nrow = 5, ncol = maxLag,
+                    dimnames = list(paste0("h", 0:4), paste0("lag", 1:maxLag)))
+  AIC_dir <- matrix(NA_real_, nrow = 5, ncol = maxLag,
+                    dimnames = list(paste0("h", 0:4), paste0("lag", 1:maxLag)))
+
+  # Loop over h = 0, 1,..., 4
+  for (kk in 0:4) {
+
+    # Loop over lag lengths
+    for (k in 0:(maxLag-1)) {
+      predictors <- paste0("gdp_dlag", kk:(kk + k))
+      formula <- as.formula(paste("gdp ~", paste(predictors, collapse = " + ")))
+
+      OLS_res <- lm(formula, data = gdp)
+      residuals <- OLS_res$residuals
+      SSR <- sum(residuals^2)
+
+      # Compute BIC and AIC for h = kk and laglength = k+1
+      BIC_dir[kk+1, k+1] <- log(SSR/T) + (k+1)  * log(T) / T
+      AIC_dir[kk+1, k+1] <- log(SSR/T) + (k+1) * 2/T
+    }
+  }
+
+  # best by BIC and AIC
+  best_BIC_dir <- apply(BIC_dir, 1, which.min)
+  best_AIC_dir <- apply(AIC_dir, 1, which.min)
+
+
+  ### Indirect forecasting (IAR)
+  BIC_ind <- matrix(1,maxLag)
+  AIC_ind <- matrix(1,maxLag)
+
+  # Loop over lag lengths
+  for (k in 1:maxLag) {
+    predictors <- paste0("gdp_lag", 1:k)
+    formula <- as.formula(paste("gdp ~", paste(predictors, collapse = " + ")))
+
+    OLS_res <- lm(formula, data = gdp)
+    residuals <- OLS_res$residuals
+    SSR <- sum(residuals^2)
+
+    # Compute BIC and AIC for laglength = k
+    BIC_ind[k] <- log(SSR/T) + k  * log(T) / T
+    AIC_ind[k] <- log(SSR/T) + k * 2/T
+  }
+
+  # best by BIC and AIC
+  best_BIC_ind <- which.min(BIC_ind)
+  best_AIC_ind <- which.min(AIC_ind)
+
+
+  Output <- list(
+    BIC_direct = best_BIC_dir,
+    AIC_direct = best_AIC_dir,
+    BIC_indirect = best_BIC_ind,
+    AIC_indirect = best_AIC_ind
+  )
+  return(Output)
+
+}
+
+
+
