@@ -87,7 +87,7 @@ spf_forecasts_ny <- spf_data %>%
 ### Actuals of RGDP
 
 # First or second release of RGDP as actuals
-release <- 1
+release <- 2
 
 # Keep second releases
 rgdp <- rgdp_all %>%
@@ -247,9 +247,9 @@ error_stats <- lapply(0:4, function(h) {
   # Compute SPF and benchmark errors
   spf_forecast_error <- evaluation_data[[paste0("spf_fc_error_", h)]]
   benchmark_error <- actual - gdp_mean
-  dar_forecast_error <- evaluation_data[[paste0("DAR_h", h)]]
-  iar_forecast_error <- evaluation_data[[paste0("IAR_h", h)]]
-  RWmean_forecast_error <- evaluation_data[[paste0("RWmean_h", h)]]
+  dar_forecast_error <- actual - evaluation_data[[paste0("DAR_h", h)]]
+  iar_forecast_error <- actual - evaluation_data[[paste0("IAR_h", h)]]
+  RWmean_forecast_error <- actual - evaluation_data[[paste0("RWmean_h", h)]]
 
   # Compute mse and mae
   spf_mse <- mean((spf_forecast_error)^2, na.rm = TRUE)
