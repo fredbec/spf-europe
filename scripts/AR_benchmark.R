@@ -137,7 +137,7 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
     }
 
 
-    ### Indirect forecasts DAR(p)
+    ### Indirect forecasts IAR(p)
 
     # Set up IAR model
     lags <- lagLenghts$BIC_indirect
@@ -146,8 +146,6 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
 
     # Estimate OLS
     ar_coeff <- lm(formula, data = gdp_rt)
-
-    # Forecast h steps ahead
 
     # Initialize latest observed values for IAR
     gdp_latest_iar <- gdp_latest[1:lags]
@@ -160,6 +158,7 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
       }
     }
 
+    # Forecast h steps ahead
     for (h in 0:4) {
 
       # Prepare vector of predictors
@@ -186,6 +185,7 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
 
   }
 
+  # Define output of this function
   Output <- list(
     DAR_fc     = fc_DAR,
     IAR_fc     = fc_IAR,
