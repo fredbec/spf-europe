@@ -1,5 +1,6 @@
 source(here("scripts", "kalman_filter.R"))
 source(here("scripts", "kalman_filter_us.R"))
+source(here("scripts", "kalman_filter_us_gamma.R"))
 
 get_rtd <- function(real_time_data,
                     current_issue,
@@ -69,6 +70,7 @@ filter_dat <- function(current_quarter,
                        real_time_data,
                        SPF_data_US = NULL,
                        release_US_SPF = "latest",
+                       est_gamma = FALSE,
                        rtd_issue = c("latest_vintage", "rtd")){
 
   if(length(rtd_issue) > 1){
@@ -173,21 +175,42 @@ filter_dat <- function(current_quarter,
   } else {
     #following code is a bit adhoc, since there was an error in the instance 2018Q1
     #with the Cholesky decomposition
-    cyres <- tryCatch(
-      {
-        SPF_filter_us(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
-      },
-      error = function(e){
-        message(paste0(current_year, "Q", current_quarter))
+    if(!est_gamma){
+      cyres <- tryCatch(
+        {
+          SPF_filter_us(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
+        },
+        error = function(e){
+          message(paste0(current_year, "Q", current_quarter))
 
-        data_filter_cy[, 3] <- data_filter_cy[, 3] - rnorm(1, sd = 0.0001)
-        SPF_filter_us(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
-      }
-    )
-    spf_filter_vals_cy <- cyres$SPF_filtered
-    #spf_filter_vals_cyandny <- spf_filter_vals_cy
-    cyandnyres <- SPF_filter_us(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, data_filter_cyandny$rgdp_growth_usspf)
-    spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+          data_filter_cy[, 3] <- data_filter_cy[, 3] - rnorm(1, sd = 0.0001)
+          SPF_filter_us(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
+        }
+      )
+      spf_filter_vals_cy <- cyres$SPF_filtered
+      #spf_filter_vals_cyandny <- spf_filter_vals_cy
+      cyandnyres <- SPF_filter_us(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, data_filter_cyandny$rgdp_growth_usspf)
+      spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+    } else {
+
+      cyres <- tryCatch(
+        {
+          SPF_filter_us_gamma(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
+        },
+        error = function(e){
+          message(paste0(current_year, "Q", current_quarter))
+
+          data_filter_cy[, 3] <- data_filter_cy[, 3] - rnorm(1, sd = 0.0001)
+          SPF_filter_us_gamma(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
+        }
+      )
+      spf_filter_vals_cy <- cyres$SPF_filtered
+      #spf_filter_vals_cyandny <- spf_filter_vals_cy
+      cyandnyres <- SPF_filter_us_gamma(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, data_filter_cyandny$rgdp_growth_usspf)
+      spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+
+    }
+
   }
 
   #make spf_filter_dat (take target columns from data_filter_cyandny)
