@@ -18,118 +18,170 @@ cat("\014")
 
 ##### Read in and merge SPF and RGDP data
 
-# Read in filtered quarterly SPF forecasts
-#spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
-spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead0.csv")
+prep_spf_data = function(spf_us = 0, spf_h = NA) {
 
-# Read in real-time GDP
-rgdp_pre <- read.csv("data/revdatpre14.csv")
-rgdp_post <- read.csv("data/revdatpost14.csv")
+  ### Read in filtered quarterly SPF forecasts
+  if (spf_us == 0) {
+    # SPF without US
+    spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
+  } else if (spf_us == 2) {
 
-# Merge GDP
-rgdp_pre <- rgdp_pre[ - which(rgdp_pre$origin_year == 2014 & rgdp_pre$origin_month > 9), ]
-rgdp_pre$origin_day <- NA
-rgdp_all <- rbind(rgdp_pre,rgdp_post)
+    # SPF with US and gamma
+    if (is.na(spf_h)) {
+      spf_data <- read.csv("data/filter_spf_data_medianfc_withus_withgammaest.csv")
+    } else if (spf_h == 0) {
+      spf_data <- read.csv("data/filter_spf_data_medianfc_withus_withgammaest_stepahead0.csv")
+    } else if (spf_h == 1) {
+      spf_data <- read.csv("data/filter_spf_data_medianfc_withus_withgammaest_stepahead1.csv")
+    } else if (spf_h == 2) {
+      spf_data <- read.csv("data/filter_spf_data_medianfc_withus_withgammaest_stepahead2.csv")
+    } else if (spf_h == 3) {
+      spf_data <- read.csv("data/filter_spf_data_medianfc_withus_withgammaest_stepahead3.csv")
+    }
 
-# Compute quarterly GDP growth rates
-rgdp_all <- rgdp_all %>%
-  arrange(origin_year, origin_month, target_year, target_quarter) %>%  # ensure correct order
-  group_by(origin_year, origin_month) %>%
-  mutate(
-    gdp_growth = ( (rgdp / lag(rgdp) ) ^ 4 - 1) * 100,
-  ) %>%
-  ungroup()
+  } else if (spf_us == 1) {
+
+    # SPF with US but without gamma
+    if (is.na(spf_h)) {
+      spf_data <- read.csv("data/filter_spf_data_medianfc_withus.csv")
+    } else if (spf_h == 0) {
+      spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead0.csv")
+    } else if (spf_h == 1) {
+      spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead1.csv")
+    } else if (spf_h == 2) {
+      spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead2.csv")
+    } else if (spf_h == 3) {
+      spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead3.csv")
+    }
+
+  }
 
 
-### Filtered SPF h = 0, 1, ..., 4 step ahead forecasts
+  # Read in real-time GDP
+  rgdp_pre <- read.csv("data/revdatpre14.csv")
+  rgdp_post <- read.csv("data/revdatpost14.csv")
 
-# Create 'target_date' and 'origin_date' as yearqtr objects
-spf_data <- spf_data %>%
-  mutate(
-    target_date = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q"),
-    origin_date = as.yearqtr(paste(origin_year, origin_quarter), format = "%Y %q")
+  # Merge GDP
+  rgdp_pre <- rgdp_pre[ - which(rgdp_pre$origin_year == 2014 & rgdp_pre$origin_month > 9), ]
+  rgdp_pre$origin_day <- NA
+  rgdp_all <- rbind(rgdp_pre,rgdp_post)
+
+  # Compute quarterly GDP growth rates
+  rgdp_all <- rgdp_all %>%
+    arrange(origin_year, origin_month, target_year, target_quarter) %>%  # ensure correct order
+    group_by(origin_year, origin_month) %>%
+    mutate(
+      gdp_growth = ( (rgdp / lag(rgdp) ) ^ 4 - 1) * 100,
+    ) %>%
+    ungroup()
+
+
+  ### Filtered SPF h = 0, 1, ..., 4 step ahead forecasts
+
+  # Create 'target_date' and 'origin_date' as yearqtr objects
+  spf_data <- spf_data %>%
+    mutate(
+      target_date = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q"),
+      origin_date = as.yearqtr(paste(origin_year, origin_quarter), format = "%Y %q")
+    )
+
+  # Read out forecast horizon h = difference in quarters
+  spf_data <- spf_data %>%
+    mutate(
+      h = as.integer(4 * (target_date - origin_date))  # 4 quarters per year
+    ) %>%
+    filter(h %in% 0:4)  # Keep only horizons of interest
+
+  # Replace Na with forecasts exploiting the two-year-ahead SPF
+  spf_data <- spf_data %>%
+    mutate(
+      spf_filter_cy = coalesce(spf_filter_cy, spf_filter_ny)
+    )
+
+
+  #reshape forecasts like US SPF format
+  spf_forecasts_cy <- spf_data %>%
+    select(target_year, target_quarter, h, spf_filter_cy) %>%
+    pivot_wider(
+      names_from = h,
+      names_prefix = "spf_h",
+      values_from = spf_filter_cy
+    ) %>%
+    arrange(target_year, target_quarter)
+
+  spf_forecasts_ny <- spf_data %>%
+    select(target_year, target_quarter, h, spf_filter_ny) %>%
+    pivot_wider(
+      names_from = h,
+      names_prefix = "spf_h",
+      values_from = spf_filter_ny
+    ) %>%
+    arrange(target_year, target_quarter)
+
+
+  ### Actuals of RGDP
+
+  # First or second release of RGDP as actuals
+  release <- 2
+
+  # Keep second releases
+  rgdp <- rgdp_all %>%
+    mutate(
+      # Convert to yearqtr (e.g., 2018 Q2 → 2018.25)
+      ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q"),
+
+      # Create origin_date from origin_year and origin_month
+      origin_date = make_date(origin_year, origin_month, 1)
+    )
+
+  rgdp <- rgdp %>%
+    arrange(ref_period, origin_date) %>%
+    group_by(ref_period) %>%
+    slice(release) %>%
+    ungroup()
+
+
+
+  # Merge SPF and actuals of RGDP
+  target_aux <- cbind(spf_forecasts_cy$target_quarter, spf_forecasts_cy$target_year)
+
+  spf_forecasts_cy <- spf_forecasts_cy %>%
+    mutate(ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q")) %>%
+    select(-target_year, -target_quarter)
+
+  spf_forecasts_ny <- spf_forecasts_ny %>%
+    mutate(ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q")) %>%
+    select(-target_year, -target_quarter)
+
+  evaluation_data_cy <- rgdp %>%
+    left_join(spf_forecasts_cy, by = "ref_period") # %>%
+    # filter(ref_period >= as.yearqtr("2002 Q1", format = "%Y Q%q"))
+
+  evaluation_data_ny <- rgdp %>%
+    left_join(spf_forecasts_ny, by = "ref_period")
+
+  spf_forecasts_ny$target_year <- target_aux[,2]
+  spf_forecasts_ny$target_quarter <- target_aux[,1]
+  spf_forecasts_cy$target_year <- target_aux[,2]
+  spf_forecasts_cy$target_quarter <- target_aux[,1]
+
+  output <- list(
+    rgdp_all           = rgdp_all,
+    spf_forecasts_cy   = spf_forecasts_cy,
+    spf_forecasts_ny   = spf_forecasts_ny,
+    evaluation_data_cy = evaluation_data_cy,
+    evaluation_data_ny = evaluation_data_ny
   )
 
-# Read out forecast horizon h = difference in quarters
-spf_data <- spf_data %>%
-  mutate(
-    h = as.integer(4 * (target_date - origin_date))  # 4 quarters per year
-  ) %>%
-  filter(h %in% 0:4)  # Keep only horizons of interest
+  return(output)
+}
 
-# Replace Na with forecasts exploiting the two-year-ahead SPF
-spf_data <- spf_data %>%
-  mutate(
-    spf_filter_cy = coalesce(spf_filter_cy, spf_filter_ny)
-  )
-
-
-#reshape forecasts like US SPF format
-spf_forecasts_cy <- spf_data %>%
-  select(target_year, target_quarter, h, spf_filter_cy) %>%
-  pivot_wider(
-    names_from = h,
-    names_prefix = "spf_h",
-    values_from = spf_filter_cy
-  ) %>%
-  arrange(target_year, target_quarter)
-
-spf_forecasts_ny <- spf_data %>%
-  select(target_year, target_quarter, h, spf_filter_ny) %>%
-  pivot_wider(
-    names_from = h,
-    names_prefix = "spf_h",
-    values_from = spf_filter_ny
-  ) %>%
-  arrange(target_year, target_quarter)
-
-
-### Actuals of RGDP
-
-# First or second release of RGDP as actuals
-release <- 2
-
-# Keep second releases
-rgdp <- rgdp_all %>%
-  mutate(
-    # Convert to yearqtr (e.g., 2018 Q2 → 2018.25)
-    ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q"),
-
-    # Create origin_date from origin_year and origin_month
-    origin_date = make_date(origin_year, origin_month, 1)
-  )
-
-rgdp <- rgdp %>%
-  arrange(ref_period, origin_date) %>%
-  group_by(ref_period) %>%
-  slice(release) %>%
-  ungroup()
-
-
-
-# Merge SPF and actuals of RGDP
-target_aux <- cbind(spf_forecasts_cy$target_quarter, spf_forecasts_cy$target_year)
-
-spf_forecasts_cy <- spf_forecasts_cy %>%
-  mutate(ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q")) %>%
-  select(-target_year, -target_quarter)
-
-spf_forecasts_ny <- spf_forecasts_ny %>%
-  mutate(ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q")) %>%
-  select(-target_year, -target_quarter)
-
-evaluation_data_cy <- rgdp %>%
-  left_join(spf_forecasts_cy, by = "ref_period") # %>%
-  # filter(ref_period >= as.yearqtr("2002 Q1", format = "%Y Q%q"))
-
-evaluation_data_ny <- rgdp %>%
-  left_join(spf_forecasts_ny, by = "ref_period")
-
-spf_forecasts_ny$target_year <- target_aux[,2]
-spf_forecasts_ny$target_quarter <- target_aux[,1]
-spf_forecasts_cy$target_year <- target_aux[,2]
-spf_forecasts_cy$target_quarter <- target_aux[,1]
-
+SPF <- prep_spf_data(0)
+rgdp_all           = SPF$rgdp_all
+spf_forecasts_cy   = SPF$spf_forecasts_cy
+spf_forecasts_ny   = SPF$spf_forecasts_ny
+evaluation_data_cy = SPF$evaluation_data_cy
+evaluation_data_ny = SPF$evaluation_data_ny
 
 # Quick plots
 
@@ -160,6 +212,50 @@ ggplot(plot_data_long, aes(x = ref_period, y = value, color = series)) +
   ) +
   theme_minimal()
 
+
+
+### Prepare SPF data with US SPF for evaluation
+# Gamma calibrated on h = 0
+gamma = 1 # no estimation of gamma
+#gamma = 2 # estimation of gamma
+
+SPF <- prep_spf_data(spf_us = gamma, spf_h = 0)
+rgdp_all           <- SPF$rgdp_all
+spf_forecasts_cy   <- SPF$spf_forecasts_cy
+spf_forecasts_ny   <- SPF$spf_forecasts_ny
+evaluation_data_cy <- SPF$evaluation_data_cy
+evaluation_data_ny <- SPF$evaluation_data_ny
+
+# Gamma calibrated on h = 1
+SPF <- prep_spf_data(spf_us = 1, spf_h = 1)
+spf_forecasts_cy$spf_h1   <- SPF$spf_forecasts_cy$spf_h1
+spf_forecasts_ny$spf_h1   <- SPF$spf_forecasts_ny$spf_h1
+evaluation_data_cy$spf_h1 <- SPF$evaluation_data_cy$spf_h1
+evaluation_data_ny$spf_h1 <- SPF$evaluation_data_ny$spf_h1
+
+# Gamma calibrated on h = 2
+SPF <- prep_spf_data(spf_us = 1, spf_h = 2)
+spf_forecasts_cy$spf_h2   <- SPF$spf_forecasts_cy$spf_h2
+spf_forecasts_ny$spf_h2   <- SPF$spf_forecasts_ny$spf_h2
+evaluation_data_cy$spf_h2 <- SPF$evaluation_data_cy$spf_h2
+evaluation_data_ny$spf_h2 <- SPF$evaluation_data_ny$spf_h2
+
+# Gamma calibrated on h = 3
+SPF <- prep_spf_data(spf_us = 1, spf_h = 3)
+spf_forecasts_cy$spf_h3   <- SPF$spf_forecasts_cy$spf_h3
+spf_forecasts_ny$spf_h3   <- SPF$spf_forecasts_ny$spf_h3
+evaluation_data_cy$spf_h3 <- SPF$evaluation_data_cy$spf_h3
+evaluation_data_ny$spf_h3 <- SPF$evaluation_data_ny$spf_h3
+
+
+
+### Without US SPF
+SPF <- prep_spf_data(spf_us = 0, spf_h = 0)
+rgdp_all           <- SPF$rgdp_all
+spf_forecasts_cy   <- SPF$spf_forecasts_cy
+spf_forecasts_ny   <- SPF$spf_forecasts_ny
+evaluation_data_cy <- SPF$evaluation_data_cy
+evaluation_data_ny <- SPF$evaluation_data_ny
 
 
 
@@ -1003,10 +1099,6 @@ data$SPF3_rt[t] <- data_aux$SPF_implied[lag+4]
 
 # Update index
 T_all <- T_all - 1
-
-
-
-
 
 
 

@@ -220,13 +220,13 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
 
   # Direct lags: from h = 0 up to h = 4, plus up to max_lag extra for horizon h = 4
   direct_lags <- purrr::map_dfc(
-    set_names(0:(4 + max_lag-1), paste0("gdp_dlag", 0:(4 + max_lag-1))),
+    purrr::set_names(0:(4 + max_lag-1), paste0("gdp_dlag", 0:(4 + max_lag-1))),
     ~ lag(df$gdp_growth, lag_quarters + .x)
   )
 
   # IAR lags: from 1 to max_lag
   iar_lags <- purrr::map_dfc(
-    set_names(1:max_lag, paste0("gdp_lag", 1:max_lag)),
+    purrr::set_names(1:max_lag, paste0("gdp_lag", 1:max_lag)),
     ~ lag(df$gdp_growth, .x)
   )
 
