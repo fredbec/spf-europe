@@ -164,7 +164,10 @@
 
 ### Wrapper function calling prep_spf_data.R, filtered ECB-SPF consensus forecasts
 #   either with or without US-SPF/Industrial Production
-data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE, spf_h = NA) {
+data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
+
+  #Possible future input
+  spf_h = NA
 
   if (is.na(FilterOpt)) {
 

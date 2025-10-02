@@ -67,7 +67,8 @@ cat("\014")
 # Load auxiliary functions
 source(here("scripts", "Kalman_Main_aux_functions.R"))
 
-SPF <- data_function_spf()
+est_gamma = FALSE
+SPF <- data_function_spf('US_SPF', est_gamma)
 rgdp_all           <- SPF$rgdp_all
 spf_forecasts_cy   <- SPF$spf_forecasts_cy
 spf_forecasts_ny   <- SPF$spf_forecasts_ny
