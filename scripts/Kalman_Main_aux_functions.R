@@ -181,7 +181,7 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
       ### Prepare SPF data augmented by US-SPF calibrated on the respective forecast horizon h
 
       # Initialize using h = 0
-      SPF <- .prep_spf_data(FilterOpt = FilterOpt, gamma_est = gamma_estimation, spf_h = spf_h)
+      SPF <- .prep_spf_data(FilterOpt = FilterOpt, gamma_est = gamma_estimation, spf_h = 0)
       rgdp_all           <- SPF$rgdp_all
       spf_forecasts_cy   <- SPF$spf_forecasts_cy
       spf_forecasts_ny   <- SPF$spf_forecasts_ny
