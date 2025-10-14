@@ -24,6 +24,14 @@ ipeu <- ipeu |>
   DT(unit == "I21") |>
   DT(origin_date == "2025-08-14") |>
   DT(seasonal_adj_type == "SCA") |>
-  DT(, .SD, .SDcols = c("target_period", "value"))
+  DT(, .SD, .SDcols = c("target_period", "value")) |>
+  DT(, target_year := as.numeric(sub("-.*", "", target_period)))|>
+  DT(, target_month := as.numeric(sub(".*-", "", target_period))) |>
+  DT(, target_period := NULL) |>
+  DT(, target_quarter := ceiling(target_month/3)) |>
+  DT(, value := as.numeric(value)) |>
+  DT(, ip := mean(value), by = c("target_year", "target_quarter")) |>
+  DT(, .SD, .SDcols = c("target_year", "target_quarter", "ip")) |>
+  unique()
 
 data.table::fwrite(ipeu, here("data", "ip_consolidated.csv"))
