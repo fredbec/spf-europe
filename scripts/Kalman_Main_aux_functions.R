@@ -39,9 +39,9 @@
       }
     }
 
-  } #else if (FilterOpt == 'IndProd') {
-  #spf_data <- read.csv("data/filter_spf_data_medianfc_???.csv")
-  #}
+  } else if (FilterOpt == 'IndProd') {
+    spf_data <- read.csv("data/filter_spf_data_medianfc_withip_withgammaest.csv")
+  }
 
   # Read in real-time GDP
   rgdp_pre  <- read.csv("data/revdatpre14.csv")
@@ -174,7 +174,7 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
     ### ECB-SPF filtered without US-SPF
     SPF <- .prep_spf_data()
 
-  } else {
+  } else if (FilterOpt == 'US_SPF') {
     ### ECB-SPF augmented by US-SPF or Industrial Production
 
     if (is.na(spf_h)) {
@@ -199,6 +199,9 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
         evaluation_data_ny[[paste0("spf_h", h)]] <- SPF$evaluation_data_ny[[paste0("spf_h", h)]]
       }
     } #else if spf_h = h in case we want to read out filtered SPF data calibrated for a specific h only
+
+  } else if (FilterOpt == 'IndProd') {
+    SPF <- .prep_spf_data(FilterOpt)
   }
 
   return(SPF)
