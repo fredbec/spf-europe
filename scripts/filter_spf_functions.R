@@ -149,10 +149,16 @@ filter_dat <- function(current_quarter,
 
       }
 
+      #this is for the IP data
+      if(release_US_SPF < 0){
+        shift_cqu <- release_US_SPF + 1
+      } else {
+        shift_cqu <- 0
+      }
       cpreds_zero <- SPF_data_US |>
         DT(,step_ahead := (target_quarter - origin_quarter) + (target_year - origin_year)*4) |>
         DT(step_ahead == release_US_SPF & origin_year <= current_year) |>
-        DT(, prev := ifelse(origin_year == current_year & origin_quarter > current_quarter, 1, 0)) |> #important that here we have origin_quarter > current_quarter and not origin_quarter >=  current_quarter (as above)
+        DT(, prev := ifelse(origin_year == current_year & origin_quarter > (current_quarter + shift_cqu), 1, 0)) |> #important that here we have origin_quarter > current_quarter and not origin_quarter >=  current_quarter (as above)
         DT(prev == 0) |>
         DT(, c("prev", "step_ahead", "origin_year", "origin_quarter") := NULL) |>
         setnames("prediction", "rgdp_growth_usspf")
