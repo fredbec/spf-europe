@@ -175,7 +175,7 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
     SPF <- .prep_spf_data()
 
   } else if (FilterOpt == 'US_SPF') {
-    ### ECB-SPF augmented by US-SPF or Industrial Production
+    ### ECB-SPF augmented by US-SPF
 
     if (is.na(spf_h)) {
       ### Prepare SPF data augmented by US-SPF calibrated on the respective forecast horizon h
@@ -201,7 +201,10 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
     } #else if spf_h = h in case we want to read out filtered SPF data calibrated for a specific h only
 
   } else if (FilterOpt == 'IndProd') {
+
+    ### ECB-SPF augmented Industrial Production
     SPF <- .prep_spf_data(FilterOpt)
+
   }
 
   return(SPF)
