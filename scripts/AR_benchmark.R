@@ -77,7 +77,7 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
   # Filter the relevant vintages
   vintages <- rgdp %>%
     filter(origin_year >= 2001 & origin_year <= SampleEnd, # starts in 2001
-           origin_month %in% c(2, 5, 8, 11)) %>%
+           origin_month %in% c(2, 5, 8, 11)) %>%           # c(2, 5, 8, 11) end of middle month of a quarter
     distinct(origin_year, origin_month) %>%
     arrange(origin_year, origin_month)
 
@@ -113,7 +113,7 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
     rw_length <- min(rw_length, T_max)
     ar_length <- min(ar_length + max_lag, T_max)
     gdp_rt <- gdp_rt[(T_max-ar_length+1):T_max, ]
-
+    T_max <- dim(gdp_rt)[1]
 
     ### Direct forecasts DAR(p)
 
