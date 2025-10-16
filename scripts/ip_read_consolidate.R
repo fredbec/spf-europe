@@ -32,6 +32,10 @@ ipeu <- ipeu |>
   DT(, value := as.numeric(value)) |>
   DT(, ip := mean(value), by = c("target_year", "target_quarter")) |>
   DT(, .SD, .SDcols = c("target_year", "target_quarter", "ip")) |>
-  unique()
+  unique() |>
+  DT(, growth_rate := (ip - shift(ip)) / shift(ip) * 100) |>
+  DT(, ip := NULL) |>
+  setnames("growth_rate", "ip")
+
 
 data.table::fwrite(ipeu, here("data", "ip_consolidated.csv"))
