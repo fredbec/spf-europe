@@ -83,13 +83,13 @@ spf_data_ny <- SPF$evaluation_data_ny
 # AR Benchmark models
 source(here("scripts", "AR_benchmark.R"))
 AR_bench <- AR_benchmark(rgdp_all, ar_length = 30,
-                         rw_length = 1,
+                         rw_length = 8,
                          max_lag = 4,
                          SampleEnd = 2026)
 
 
 ### Bias of SPF forecasts
-dropYears <- NA # cbind(2009, 2009)
+dropYears  <- NA # cbind(2009, 2010)
 evalPeriod <- cbind(2002,2019)
 
 # Bias of SPF filtered using current year projections only if possible

@@ -294,6 +294,9 @@ SPF_RMSE_DM_Test <- function(spf_data, ar_benchmak_data,
   evaluation_data <- evaluation_data %>%
     left_join(ar_benchmak_data$RWmean_fc, by = "ref_period")
 
+  evaluation_data <- evaluation_data %>%
+    left_join(ar_benchmak_data$NoChange_fc, by = "ref_period")
+
   # Drop missings
   evaluation_data <- evaluation_data %>%
     filter(!(is.na(spf_h0) | is.na(spf_h4)))
@@ -327,21 +330,24 @@ SPF_RMSE_DM_Test <- function(spf_data, ar_benchmak_data,
     dar_sq_error       <- (actual - evaluation_data[[paste0("DAR_h", h)]])^2
     iar_sq_error       <- (actual - evaluation_data[[paste0("IAR_h", h)]])^2
     RWmean_sq_error    <- (actual - evaluation_data[[paste0("RWmean_h", h)]])^2
+    NoChange_sq_error  <- (actual - evaluation_data[[paste0("NoChange_h", h)]])^2
 
     # Compute RMSE
     spf_mse       <- mean(spf_sq_error)
     hist_mean_mse <- mean(benchmark_sq_error)
-    DAR_mean_mse  <- mean(dar_sq_error)
-    IAR_mean_mse  <- mean(iar_sq_error)
+    DAR_mse       <- mean(dar_sq_error)
+    IAR_mse       <- mean(iar_sq_error)
     RW_mean_mse   <- mean(RWmean_sq_error)
+    NoChange_mse  <- mean(NoChange_sq_error)
 
     tibble(
       horizon = h,
-      spf_rmse = sqrt(spf_mse),
+      spf_rmse       = sqrt(spf_mse),
       hist_mean_rmse = sqrt(hist_mean_mse),
-      RW_mean_rmse = sqrt(RW_mean_mse),
-      DAR_mean_rmse = sqrt(DAR_mean_mse),
-      IAR_mean_rmse = sqrt(IAR_mean_mse)
+      RW_rmse        = sqrt(RW_mean_mse),
+      DAR_rmse       = sqrt(DAR_mse),
+      IAR_rmse       = sqrt(IAR_mse),
+      NoChange_rmse  = sqrt(NoChange_mse)
     )
 
   })
@@ -358,12 +364,14 @@ SPF_RMSE_DM_Test <- function(spf_data, ar_benchmak_data,
     dar_sq_error       <- (actual - evaluation_data[[paste0("DAR_h", h)]])^2
     iar_sq_error       <- (actual - evaluation_data[[paste0("IAR_h", h)]])^2
     RWmean_sq_error    <- (actual - evaluation_data[[paste0("RWmean_h", h)]])^2
+    NoChange_sq_error  <- (actual - evaluation_data[[paste0("NoChange_h", h)]])^2
 
     # Run DM Tests of competitor models versus SPF
     Loss_spf_hist_mean <- benchmark_sq_error - spf_sq_error
     Loss_spf_dar       <- dar_sq_error - spf_sq_error
     Loss_spf_iar       <- iar_sq_error - spf_sq_error
     Loss_spf_RWmean    <- RWmean_sq_error - spf_sq_error
+    Loss_spf_NoChange  <- NoChange_sq_error - spf_sq_error
 
     dm_test <- lm(Loss_spf_hist_mean ~ 1)
     nw_var  <- NeweyWest(dm_test, lag = lagLength, prewhite = FALSE)
@@ -381,12 +389,17 @@ SPF_RMSE_DM_Test <- function(spf_data, ar_benchmak_data,
     nw_var  <- NeweyWest(dm_test, lag = lagLength, prewhite = FALSE)
     dm_test_rwmean <- coef(dm_test) / sqrt(nw_var)
 
+    dm_test <- lm(Loss_spf_NoChange ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lagLength, prewhite = FALSE)
+    dm_test_nochange <- coef(dm_test) / sqrt(nw_var)
+
     tibble(
       horizon = h,
       spf_hist_mean = dm_test_hist_mean,
       SPF_RW_mean = dm_test_rwmean,
       spf_DAR = dm_test_dar,
-      spf_IAR = dm_test_iar
+      spf_IAR = dm_test_iar,
+      spf_NoChange = dm_test_nochange
     )
 
   })

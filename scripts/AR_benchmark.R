@@ -74,6 +74,15 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
     RWmean_h4 = NA_real_,
   )
 
+  fc_NoChange <- tibble(
+    ref_period = as.yearqtr(ref_qtrs),
+    NoChange_h0 = NA_real_,
+    NoChange_h1 = NA_real_,
+    NoChange_h2 = NA_real_,
+    NoChange_h3 = NA_real_,
+    NoChange_h4 = NA_real_,
+  )
+
   # Filter the relevant vintages
   vintages <- rgdp %>%
     filter(origin_year >= 2001 & origin_year <= SampleEnd, # starts in 2001
@@ -176,12 +185,18 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
     }
 
 
-    ### Rolling window mean
-    fc_RWmean$RWmean_h0[i] <- mean(gdp_rt$gdp[(T_max-rw_length+1):T_max])
+    ### Rolling window mean and NoChange forecast
+    fc_RWmean$RWmean_h0[i]   <- mean(gdp_rt$gdp[(T_max-rw_length+1):T_max])
     fc_RWmean$RWmean_h1[i+1] <- fc_RWmean$RWmean_h0[i]
     fc_RWmean$RWmean_h2[i+2] <- fc_RWmean$RWmean_h0[i]
     fc_RWmean$RWmean_h3[i+3] <- fc_RWmean$RWmean_h0[i]
     fc_RWmean$RWmean_h4[i+4] <- fc_RWmean$RWmean_h0[i]
+
+    fc_NoChange$NoChange_h0[i]   <- mean(gdp_rt$gdp[T_max])
+    fc_NoChange$NoChange_h1[i+1] <- fc_NoChange$NoChange_h0[i]
+    fc_NoChange$NoChange_h2[i+2] <- fc_NoChange$NoChange_h0[i]
+    fc_NoChange$NoChange_h3[i+3] <- fc_NoChange$NoChange_h0[i]
+    fc_NoChange$NoChange_h4[i+4] <- fc_NoChange$NoChange_h0[i]
 
   }
 
@@ -189,7 +204,8 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
   Output <- list(
     DAR_fc     = fc_DAR,
     IAR_fc     = fc_IAR,
-    RWmean_fc = fc_RWmean
+    RWmean_fc = fc_RWmean,
+    NoChange_fc = fc_NoChange
   )
   return(Output)
 
