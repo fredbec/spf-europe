@@ -165,7 +165,7 @@
 #   either with or without US-SPF/Industrial Production
 data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
 
-  #Possible future input
+  # Possible future input
   spf_h = NA
 
   if (is.na(FilterOpt)) {
@@ -282,7 +282,7 @@ SPF_bias <- function(spf_data, EvalPeriod = cbind(2002, 2019), DropPeriod = NA) 
 ####### HEADER
 SPF_RMSE_DM_Test <- function(spf_data, ar_benchmak_data,
                              EvalPeriod = cbind(2002, 2019),
-                             DropPeriod = NA, lagLength = 4) {
+                             DropPeriod = NA, lagLength = NA) {
 
   # Merge SPF and AR-banchmark models
   evaluation_data <- spf_data %>%
@@ -354,6 +354,7 @@ SPF_RMSE_DM_Test <- function(spf_data, ar_benchmak_data,
 
 
   ### Diebold-Mariano test
+  n <- length(actual)
 
   # Loop over h = 0 to 4
   DM_Test <- lapply(0:4, function(h) {
@@ -373,24 +374,31 @@ SPF_RMSE_DM_Test <- function(spf_data, ar_benchmak_data,
     Loss_spf_RWmean    <- RWmean_sq_error - spf_sq_error
     Loss_spf_NoChange  <- NoChange_sq_error - spf_sq_error
 
+    # Lag length for HAC standard errors
+    if (is.na(lagLength)) {
+      lags <- as.integer( n^0.25 )
+    } else {
+      lags <- lagLength
+    }
+
     dm_test <- lm(Loss_spf_hist_mean ~ 1)
-    nw_var  <- NeweyWest(dm_test, lag = lagLength, prewhite = FALSE)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
     dm_test_hist_mean <- coef(dm_test) / sqrt(nw_var)
 
     dm_test <- lm(Loss_spf_dar ~ 1)
-    nw_var  <- NeweyWest(dm_test, lag = lagLength, prewhite = FALSE)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
     dm_test_dar <- coef(dm_test) / sqrt(nw_var)
 
     dm_test <- lm(Loss_spf_iar ~ 1)
-    nw_var  <- NeweyWest(dm_test, lag = lagLength, prewhite = FALSE)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
     dm_test_iar <- coef(dm_test) / sqrt(nw_var)
 
     dm_test <- lm(Loss_spf_RWmean ~ 1)
-    nw_var  <- NeweyWest(dm_test, lag = lagLength, prewhite = FALSE)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
     dm_test_rwmean <- coef(dm_test) / sqrt(nw_var)
 
     dm_test <- lm(Loss_spf_NoChange ~ 1)
-    nw_var  <- NeweyWest(dm_test, lag = lagLength, prewhite = FALSE)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
     dm_test_nochange <- coef(dm_test) / sqrt(nw_var)
 
     tibble(

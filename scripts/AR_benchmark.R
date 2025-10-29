@@ -39,12 +39,18 @@
 #' }
 #' #'
 #' @export
-AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
+AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, endMonth = 2) {
 
   # Specify evaluation sample
   ref_qtrs <- seq(as.yearqtr("2001 Q1", format = "%Y Q%q"), # Has to be correctly chosen!
                   as.yearqtr(SampleEnd + 0.75, format = "%Y Q%q"),
                   by = 0.25)
+
+  # Maximum of three months per quarter
+  if (endMonth > 3) {
+    endMonth = 3
+    cat('Warning: Maximum of three months per quarter. Thus, endMonth = 3 choosen.')
+  }
 
   # Set up matrices to store real-time forecasts
   fc_DAR <- tibble(
@@ -85,8 +91,8 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
 
   # Filter the relevant vintages
   vintages <- rgdp %>%
-    filter(origin_year >= 2001 & origin_year <= SampleEnd, # starts in 2001
-           origin_month %in% c(2, 5, 8, 11)) %>%           # c(2, 5, 8, 11) end of middle month of a quarter
+    filter(origin_year >= 2001 & origin_year <= SampleEnd,    # starts in 2001
+           origin_month %in% (c(0, 3, 6, 9) + endMonth) ) %>% # c(0, 3, 6, 9) + 2 is end of middle month of a quarter
     distinct(origin_year, origin_month) %>%
     arrange(origin_year, origin_month)
 
