@@ -49,7 +49,7 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, endMonth
   # Maximum of three months per quarter
   if (endMonth > 3) {
     endMonth = 3
-    cat('Warning: Maximum of three months per quarter. Thus, endMonth = 3 choosen.')
+    cat('Warning: Maximum of three months per quarter. Thus, endMonth = 3 chosen.')
   }
 
   # Set up matrices to store real-time forecasts
