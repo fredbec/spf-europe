@@ -71,7 +71,8 @@ filter_dat <- function(current_quarter,
                        SPF_data_US = NULL,
                        release_US_SPF = "latest",
                        est_gamma = FALSE,
-                       rtd_issue = c("latest_vintage", "rtd")){
+                       rtd_issue = c("latest_vintage", "rtd"),
+                       rtd_shift = -1){
 
   if(length(rtd_issue) > 1){
     stop("Choose one of the available options")
@@ -82,7 +83,7 @@ filter_dat <- function(current_quarter,
 
 
   #get current issue
-  current_issue <- get_current_issue(shift = -1,
+  current_issue <- get_current_issue(shift = rtd_shift,
                                      current_quarter = current_quarter,
                                      current_year = current_year)
 
@@ -163,7 +164,8 @@ filter_dat <- function(current_quarter,
         DT(, c("prev", "step_ahead", "origin_year", "origin_quarter") := NULL) |>
         setnames("prediction", "rgdp_growth_usspf")
 
-      data_filter_cy <- cpreds_zero[data_filter_cy, on = c("target_year", "target_quarter")]
+      data_filter_cy <- cpreds_zero[data_filter_cy, on = c("target_year", "target_quarter")] |>
+        DT(, rgdp_growth_usspf := ifelse(is.na(rgdp_growth_usspf), NaN, rgdp_growth_usspf))
 
       data_filter_cyandny <- cpreds_zero[data_filter_cyandny, on = c("target_year", "target_quarter")] |>
         DT(, rgdp_growth_usspf := ifelse(is.na(rgdp_growth_usspf), NaN, rgdp_growth_usspf))
