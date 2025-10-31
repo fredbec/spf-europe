@@ -60,6 +60,8 @@ ggplot(plot_data_long, aes(x = ref_period, y = value, color = series)) +
 
 
 
+
+
 ##### Forecast evaluation
 rm(list = ls())
 cat("\014")
@@ -67,135 +69,50 @@ cat("\014")
 # Load auxiliary functions
 source(here("scripts", "Kalman_Main_aux_functions.R"))
 
-est_gamma = FALSE
-SPF <- data_function_spf(NA) # data_function_spf('US_SPF', est_gamma)# data_function_spf('IndProd')
-rgdp_all           <- SPF$rgdp_all
-spf_forecasts_cy   <- SPF$spf_forecasts_cy
-spf_forecasts_ny   <- SPF$spf_forecasts_ny
-evaluation_data_cy <- SPF$evaluation_data_cy
-evaluation_data_ny <- SPF$evaluation_data_ny
+### Read in filtered quarterly SPF projections
+FilterType <- NA   # 'US_SPF', 'IndProd', NA
+est_gamma  <- FALSE
+SPF <- data_function_spf(FilterType, est_gamma)
+rgdp_all    <- SPF$rgdp_all
+spf_data_cy <- SPF$evaluation_data_cy
+spf_data_ny <- SPF$evaluation_data_ny
+# spf_forecasts_cy   <- SPF$spf_forecasts_cy
+# spf_forecasts_ny   <- SPF$spf_forecasts_ny
 
 
 # AR Benchmark models
 source(here("scripts", "AR_benchmark.R"))
 AR_bench <- AR_benchmark(rgdp_all, ar_length = 30,
-                         rw_length = 1,
+                         rw_length = 8,
                          max_lag = 4,
                          SampleEnd = 2026)
 
 
+### Bias of SPF forecasts
+dropYears  <- NA # cbind(2009, 2010)
+evalPeriod <- cbind(2002,2019)
+
+# Bias of SPF filtered using current year projections only if possible
+SPF_bias(spf_data_cy,DropPeriod = dropYears, EvalPeriod = evalPeriod)
+
+# Bias of SPF filtered using current and next year projections
+SPF_bias(spf_data_ny,DropPeriod = dropYears, EvalPeriod = evalPeriod)
+
+
+
 # Evaluation data (CY versus NY) and benchmark models
-evaluation_data <- evaluation_data_cy
+RMSE_test <- SPF_RMSE_DM_Test(spf_data_cy, AR_bench,
+                              DropPeriod = dropYears,
+                              EvalPeriod = evalPeriod)
 
-evaluation_data <- evaluation_data %>%
-  left_join(AR_bench$DAR_fc, by = "ref_period")
+# Root Mean Squared Errors
+RMSE_test$RMSE
 
-evaluation_data <- evaluation_data %>%
-  left_join(AR_bench$IAR_fc, by = "ref_period")
-
-evaluation_data <- evaluation_data %>%
-  left_join(AR_bench$RWmean_fc, by = "ref_period")
-
-# Drop missings
-evaluation_data <- evaluation_data %>%
-  filter(!(is.na(spf_h0) | is.na(spf_h4)))
-
-evaluation_data <- evaluation_data %>%
-  filter(!(is.na(DAR_h0) | is.na(DAR_h4)))
-
-# Exclude 2009 and 2010?
-# evaluation_data <- evaluation_data %>%
-#  filter(!(target_year %in% c(2009, 2010)))
-
-evaluation_data <- evaluation_data %>%
-  filter(target_year < 2020 & target_year > 2000)
-
-## Forecast errors
-evaluation_data <- evaluation_data %>%
-  mutate(spf_fc_error_0 = gdp_growth - spf_h0,
-         spf_fc_error_1 = gdp_growth - spf_h1,
-         spf_fc_error_2 = gdp_growth - spf_h2,
-         spf_fc_error_3 = gdp_growth - spf_h3,
-         spf_fc_error_4 = gdp_growth - spf_h4)
+# DM test statistics
+RMSE_test$DM_Test
 
 
-
-### Unbiased
-results <- lapply(0:4, function(h) {
-  # Get formula as string and evaluate
-  formula <- as.formula(paste0("spf_fc_error_", h, " ~ 1"))
-
-  # Fit regression
-  model <- lm(formula, data = evaluation_data)
-
-  # Newey-West SE (you can choose lag = h or any rule-of-thumb)
-  nw <- coeftest(model, vcov = NeweyWest(model, lag = h, prewhite = FALSE))
-
-  # Return horizon, estimate, SE, and p-value
-  tibble(
-    horizon = h,
-    intercept = nw[1, 1],
-    std_error = nw[1, 2],
-    p_value = nw[1, 4]
-  )
-})
-
-# Combine all into one table
-results_table_bias <- bind_rows(results)
-
-
-### MSE
-
-# Compute historical mean of GDP growth (the naive forecast)
-gdp_mean <- mean(evaluation_data$gdp_growth, na.rm = TRUE)
-
-# Loop over h = 0 to 4
-error_stats <- lapply(0:4, function(h) {
-  actual <- evaluation_data$gdp_growth
-
-  # Compute SPF and benchmark errors
-  spf_forecast_error <- evaluation_data[[paste0("spf_fc_error_", h)]]
-  benchmark_error <- actual - gdp_mean
-  dar_forecast_error <- actual - evaluation_data[[paste0("DAR_h", h)]]
-  iar_forecast_error <- actual - evaluation_data[[paste0("IAR_h", h)]]
-  RWmean_forecast_error <- actual - evaluation_data[[paste0("RWmean_h", h)]]
-
-  # Compute mse and mae
-  spf_mse <- mean((spf_forecast_error)^2, na.rm = TRUE)
-  spf_mae <- mean(abs(spf_forecast_error), na.rm = TRUE)
-  hist_mean_mse <- mean((benchmark_error)^2, na.rm = TRUE)
-  hist_mean_mae <- mean(abs(benchmark_error), na.rm = TRUE)
-  DAR_mean_mse <- mean((dar_forecast_error)^2, na.rm = TRUE)
-  DAR_mean_mae <- mean(abs(dar_forecast_error), na.rm = TRUE)
-  IAR_mean_mse <- mean((iar_forecast_error)^2, na.rm = TRUE)
-  IAR_mean_mae <- mean(abs(iar_forecast_error), na.rm = TRUE)
-  RW_mean_mse <- mean((RWmean_forecast_error)^2, na.rm = TRUE)
-  RW_mean_mae <- mean(abs(RWmean_forecast_error), na.rm = TRUE)
-
-
-  tibble(
-    horizon = h,
-    spf_rmse = sqrt(spf_mse),
-    #spf_mae = spf_mae,
-    hist_mean_rmse = sqrt(hist_mean_mse),
-    #hist_mean_mae = hist_mean_mae,
-    RW_mean_rmse = sqrt(RW_mean_mse),
-    #RW_mean_mae = RW_mean_mae,
-    DAR_mean_rmse = sqrt(DAR_mean_mse),
-    #AR1_mean_mae = DAR_mean_mae,
-    IAR_mean_rmse = sqrt(IAR_mean_mse)#,
-    #IAR1_mean_mae = IAR_mean_mae
-  )
-})
-
-results_table_rmse <- bind_rows(error_stats)
-
-
-print(results_table_bias)
-print(results_table_rmse)
-
-test
-
+test :)
 
 
 

@@ -39,12 +39,18 @@
 #' }
 #' #'
 #' @export
-AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
+AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, endMonth = 2) {
 
   # Specify evaluation sample
   ref_qtrs <- seq(as.yearqtr("2001 Q1", format = "%Y Q%q"), # Has to be correctly chosen!
                   as.yearqtr(SampleEnd + 0.75, format = "%Y Q%q"),
                   by = 0.25)
+
+  # Maximum of three months per quarter
+  if (endMonth > 3) {
+    endMonth = 3
+    cat('Warning: Maximum of three months per quarter. Thus, endMonth = 3 chosen.')
+  }
 
   # Set up matrices to store real-time forecasts
   fc_DAR <- tibble(
@@ -74,10 +80,19 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
     RWmean_h4 = NA_real_,
   )
 
+  fc_NoChange <- tibble(
+    ref_period = as.yearqtr(ref_qtrs),
+    NoChange_h0 = NA_real_,
+    NoChange_h1 = NA_real_,
+    NoChange_h2 = NA_real_,
+    NoChange_h3 = NA_real_,
+    NoChange_h4 = NA_real_,
+  )
+
   # Filter the relevant vintages
   vintages <- rgdp %>%
-    filter(origin_year >= 2001 & origin_year <= SampleEnd, # starts in 2001
-           origin_month %in% c(2, 5, 8, 11)) %>%
+    filter(origin_year >= 2001 & origin_year <= SampleEnd,    # starts in 2001
+           origin_month %in% (c(0, 3, 6, 9) + endMonth) ) %>% # c(0, 3, 6, 9) + 2 is end of middle month of a quarter
     distinct(origin_year, origin_month) %>%
     arrange(origin_year, origin_month)
 
@@ -113,7 +128,7 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
     rw_length <- min(rw_length, T_max)
     ar_length <- min(ar_length + max_lag, T_max)
     gdp_rt <- gdp_rt[(T_max-ar_length+1):T_max, ]
-
+    T_max <- dim(gdp_rt)[1]
 
     ### Direct forecasts DAR(p)
 
@@ -176,12 +191,18 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
     }
 
 
-    ### Rolling window mean
-    fc_RWmean$RWmean_h0[i] <- mean(gdp_rt$gdp[(T_max-rw_length+1):T_max])
+    ### Rolling window mean and NoChange forecast
+    fc_RWmean$RWmean_h0[i]   <- mean(gdp_rt$gdp[(T_max-rw_length+1):T_max])
     fc_RWmean$RWmean_h1[i+1] <- fc_RWmean$RWmean_h0[i]
     fc_RWmean$RWmean_h2[i+2] <- fc_RWmean$RWmean_h0[i]
     fc_RWmean$RWmean_h3[i+3] <- fc_RWmean$RWmean_h0[i]
     fc_RWmean$RWmean_h4[i+4] <- fc_RWmean$RWmean_h0[i]
+
+    fc_NoChange$NoChange_h0[i]   <- mean(gdp_rt$gdp[T_max])
+    fc_NoChange$NoChange_h1[i+1] <- fc_NoChange$NoChange_h0[i]
+    fc_NoChange$NoChange_h2[i+2] <- fc_NoChange$NoChange_h0[i]
+    fc_NoChange$NoChange_h3[i+3] <- fc_NoChange$NoChange_h0[i]
+    fc_NoChange$NoChange_h4[i+4] <- fc_NoChange$NoChange_h0[i]
 
   }
 
@@ -189,7 +210,8 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd) {
   Output <- list(
     DAR_fc     = fc_DAR,
     IAR_fc     = fc_IAR,
-    RWmean_fc = fc_RWmean
+    RWmean_fc = fc_RWmean,
+    NoChange_fc = fc_NoChange
   )
   return(Output)
 

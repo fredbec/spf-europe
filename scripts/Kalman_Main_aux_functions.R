@@ -161,12 +161,11 @@
 }
 
 
-
 ### Wrapper function calling prep_spf_data.R, filtered ECB-SPF consensus forecasts
 #   either with or without US-SPF/Industrial Production
 data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
 
-  #Possible future input
+  # Possible future input
   spf_h = NA
 
   if (is.na(FilterOpt)) {
@@ -209,3 +208,215 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
 
   return(SPF)
 }
+
+
+
+
+#' SPF Forecast Bias Test
+#'
+#' Computes bias in SPF GDP forecasts across horizons (h = 0,...,4)
+#' using OLS with Newey–West standard errors.
+#'
+#' @param spf_data Data frame realized and forecast GDP growth (from `data_function_spf.R`).
+#' @param EvalPeriod Numeric 2×1 matrix giving start and end years for evaluation (default: 2002–2019).
+#' @param DropPeriod Optional matrix of periods (start–end years) to exclude from evaluation.
+#'
+#' @return Tibble with intercept estimates, standard errors, and p-values for each forecast horizon.
+#' @export
+SPF_bias <- function(spf_data, EvalPeriod = cbind(2002, 2019), DropPeriod = NA) {
+
+  # Drop missings
+  evaluation_data <- spf_data %>%
+    filter(!(is.na(spf_h0) | is.na(spf_h4)))
+
+  # Adjust sample start and end points
+  evaluation_data <- evaluation_data %>%
+    filter(target_year < (EvalPeriod[2]+1) & target_year > (EvalPeriod[1]-1))
+
+  # Drop periods if specified
+  if (any(!is.na(DropPeriod))) {
+    for (i in 1:dim(DropPeriod)[1]) {
+      evaluation_data <- evaluation_data %>%
+        filter(!(target_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
+    }
+  }
+
+  # Forecast errors
+  evaluation_data <- evaluation_data %>%
+    mutate(spf_fc_error_0 = gdp_growth - spf_h0,
+           spf_fc_error_1 = gdp_growth - spf_h1,
+           spf_fc_error_2 = gdp_growth - spf_h2,
+           spf_fc_error_3 = gdp_growth - spf_h3,
+           spf_fc_error_4 = gdp_growth - spf_h4)
+
+  ### Unbiased
+  results <- lapply(0:4, function(h) {
+    # Get formula as string and evaluate
+    formula <- as.formula(paste0("spf_fc_error_", h, " ~ 1"))
+
+    # Fit regression
+    model <- lm(formula, data = evaluation_data)
+
+    # Newey-West SE (you can choose lag = h or any rule-of-thumb)
+    nw <- coeftest(model, vcov = NeweyWest(model, lag = h, prewhite = FALSE))
+
+    # Return horizon, estimate, SE, and p-value
+    tibble(
+      horizon = h,
+      intercept = nw[1, 1],
+      std_error = nw[1, 2],
+      p_value = nw[1, 4]
+    )
+  })
+
+  # Combine all into one table
+  results_bias_spf <- bind_rows(results)
+
+  return(results_bias_spf)
+}
+
+
+
+
+
+####### HEADER
+SPF_RMSE_DM_Test <- function(spf_data, ar_benchmak_data,
+                             EvalPeriod = cbind(2002, 2019),
+                             DropPeriod = NA, lagLength = NA) {
+
+  # Merge SPF and AR-banchmark models
+  evaluation_data <- spf_data %>%
+    left_join(ar_benchmak_data$DAR_fc, by = "ref_period")
+
+  evaluation_data <- evaluation_data %>%
+    left_join(ar_benchmak_data$IAR_fc, by = "ref_period")
+
+  evaluation_data <- evaluation_data %>%
+    left_join(ar_benchmak_data$RWmean_fc, by = "ref_period")
+
+  evaluation_data <- evaluation_data %>%
+    left_join(ar_benchmak_data$NoChange_fc, by = "ref_period")
+
+  # Drop missings
+  evaluation_data <- evaluation_data %>%
+    filter(!(is.na(spf_h0) | is.na(spf_h4)))
+
+  # Adjust sample start and end points
+  evaluation_data <- evaluation_data %>%
+    filter(target_year < (EvalPeriod[2]+1) & target_year > (EvalPeriod[1]-1))
+
+  # Drop periods if specified
+  if (any(!is.na(DropPeriod))) {
+    for (i in 1:dim(DropPeriod)[1]) {
+      evaluation_data <- evaluation_data %>%
+        filter(!(target_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
+    }
+  }
+
+
+  # Compute historical mean of GDP growth as simple benchmark forecast
+  gdp_mean <- mean(evaluation_data$gdp_growth, na.rm = TRUE)
+  actual <- evaluation_data$gdp_growth
+
+
+  ### Root mean squared forecast errors
+
+  # Loop over h = 0 to 4
+  sq_error_loss <- lapply(0:4, function(h) {
+
+    # Compute squared SPF and benchmark errors
+    spf_sq_error       <- (actual - evaluation_data[[paste0("spf_h", h)]])^2
+    benchmark_sq_error <- (actual - gdp_mean)^2
+    dar_sq_error       <- (actual - evaluation_data[[paste0("DAR_h", h)]])^2
+    iar_sq_error       <- (actual - evaluation_data[[paste0("IAR_h", h)]])^2
+    RWmean_sq_error    <- (actual - evaluation_data[[paste0("RWmean_h", h)]])^2
+    NoChange_sq_error  <- (actual - evaluation_data[[paste0("NoChange_h", h)]])^2
+
+    # Compute RMSE
+    spf_mse       <- mean(spf_sq_error)
+    hist_mean_mse <- mean(benchmark_sq_error)
+    DAR_mse       <- mean(dar_sq_error)
+    IAR_mse       <- mean(iar_sq_error)
+    RW_mean_mse   <- mean(RWmean_sq_error)
+    NoChange_mse  <- mean(NoChange_sq_error)
+
+    tibble(
+      horizon = h,
+      spf_rmse       = sqrt(spf_mse),
+      hist_mean_rmse = sqrt(hist_mean_mse),
+      RW_rmse        = sqrt(RW_mean_mse),
+      DAR_rmse       = sqrt(DAR_mse),
+      IAR_rmse       = sqrt(IAR_mse),
+      NoChange_rmse  = sqrt(NoChange_mse)
+    )
+
+  })
+
+
+  ### Diebold-Mariano test
+  n <- length(actual)
+
+  # Loop over h = 0 to 4
+  DM_Test <- lapply(0:4, function(h) {
+
+    # Compute squared SPF and benchmark errors
+    spf_sq_error       <- (actual - evaluation_data[[paste0("spf_h", h)]])^2
+    benchmark_sq_error <- (actual - gdp_mean)^2
+    dar_sq_error       <- (actual - evaluation_data[[paste0("DAR_h", h)]])^2
+    iar_sq_error       <- (actual - evaluation_data[[paste0("IAR_h", h)]])^2
+    RWmean_sq_error    <- (actual - evaluation_data[[paste0("RWmean_h", h)]])^2
+    NoChange_sq_error  <- (actual - evaluation_data[[paste0("NoChange_h", h)]])^2
+
+    # Run DM Tests of competitor models versus SPF
+    Loss_spf_hist_mean <- benchmark_sq_error - spf_sq_error
+    Loss_spf_dar       <- dar_sq_error - spf_sq_error
+    Loss_spf_iar       <- iar_sq_error - spf_sq_error
+    Loss_spf_RWmean    <- RWmean_sq_error - spf_sq_error
+    Loss_spf_NoChange  <- NoChange_sq_error - spf_sq_error
+
+    # Lag length for HAC standard errors
+    if (is.na(lagLength)) {
+      lags <- as.integer( n^0.25 )
+    } else {
+      lags <- lagLength
+    }
+
+    dm_test <- lm(Loss_spf_hist_mean ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+    dm_test_hist_mean <- coef(dm_test) / sqrt(nw_var)
+
+    dm_test <- lm(Loss_spf_dar ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+    dm_test_dar <- coef(dm_test) / sqrt(nw_var)
+
+    dm_test <- lm(Loss_spf_iar ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+    dm_test_iar <- coef(dm_test) / sqrt(nw_var)
+
+    dm_test <- lm(Loss_spf_RWmean ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+    dm_test_rwmean <- coef(dm_test) / sqrt(nw_var)
+
+    dm_test <- lm(Loss_spf_NoChange ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+    dm_test_nochange <- coef(dm_test) / sqrt(nw_var)
+
+    tibble(
+      horizon = h,
+      spf_hist_mean = dm_test_hist_mean,
+      SPF_RW_mean = dm_test_rwmean,
+      spf_DAR = dm_test_dar,
+      spf_IAR = dm_test_iar,
+      spf_NoChange = dm_test_nochange
+    )
+
+  })
+
+  RMSE <- bind_rows(sq_error_loss)
+  DM_Test <- bind_rows(DM_Test)
+
+  output <- list(RMSE = RMSE, DM_Test = DM_Test)
+  return(output)
+}
+
+
