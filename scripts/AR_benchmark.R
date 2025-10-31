@@ -17,6 +17,7 @@
 #' @param rw_length Integer. Length of the rolling window for the rolling mean benchmark.
 #' @param max_lag Integer. Maximum lag length considered for AR models.
 #' @param SampleEnd Numeric or integer. Last year of the evaluation sample.
+#' @param endMonth Integer. End of month within the quarter
 #'
 #' @return A list with three elements:
 #'   \item{DAR_fc}{Tibble of direct AR forecasts for h = 0,...,4}

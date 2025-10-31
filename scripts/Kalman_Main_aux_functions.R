@@ -1,10 +1,10 @@
 ### Read in and merge SPF and RGDP data
-.prep_spf_data <- function(FilterOpt = NA, gamma_est = FALSE, spf_h = NA) {
+.prep_spf_data <- function(FilterOpt = NA, gamma_est = FALSE, spf_h = NA, Month = 2) {
 
   ### Read in filtered quarterly SPF forecasts
   if (is.na(FilterOpt)) {
     # SPF without US
-    spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
+    spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_month%d.csv", Month))
 
     # SPF filter augmented by US-SPF
   } else if (FilterOpt == 'US_SPF') {
@@ -13,34 +13,34 @@
 
       # SPF filter augmented by US-SPF with estimation of gamma
       if (is.na(spf_h)) {
-        spf_data <- read.csv("data/filter_spf_data_medianfc_withus_withgammaest.csv")
+        spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withus_withgammaest_month%d.csv", Month))
       } else if (spf_h == 0) {
-        spf_data <- read.csv("data/filter_spf_data_medianfc_withus_withgammaest_stepahead0.csv")
+        spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withus_withgammaest_stepahead0_month%d.csv", Month))
       } else if (spf_h == 1) {
-        spf_data <- read.csv("data/filter_spf_data_medianfc_withus_withgammaest_stepahead1.csv")
+        spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withus_withgammaest_stepahead1_month%d.csv", Month))
       } else if (spf_h == 2) {
-        spf_data <- read.csv("data/filter_spf_data_medianfc_withus_withgammaest_stepahead2.csv")
+        spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withus_withgammaest_stepahead2_month%d.csv", Month))
       } else if (spf_h == 3) {
-        spf_data <- read.csv("data/filter_spf_data_medianfc_withus_withgammaest_stepahead3.csv")
+        spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withus_withgammaest_stepahead3_month%d.csv", Month))
       }
     } else {
 
       # SPF filter augmented by US-SPF without estimation of gamma
       if (is.na(spf_h)) {
-        spf_data <- read.csv("data/filter_spf_data_medianfc_withus.csv")
+        spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withus_month%d.csv", Month))
       } else if (spf_h == 0) {
-        spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead0.csv")
+        spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withus_stepahead0_month%d.csv", Month))
       } else if (spf_h == 1) {
-        spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead1.csv")
+        spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withus_stepahead1_month%d.csv", Month))
       } else if (spf_h == 2) {
-        spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead2.csv")
+        spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withus_stepahead2_month%d.csv", Month))
       } else if (spf_h == 3) {
-        spf_data <- read.csv("data/filter_spf_data_medianfc_withus_stepahead3.csv")
+        spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withus_stepahead3_month%d.csv", Month))
       }
     }
 
   } else if (FilterOpt == 'IndProd') {
-    spf_data <- read.csv("data/filter_spf_data_medianfc_withip_withgammaest.csv")
+    spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_withip_withgammaest_month%d.csv", Month))
   }
 
   # Read in real-time GDP
@@ -163,7 +163,7 @@
 
 ### Wrapper function calling prep_spf_data.R, filtered ECB-SPF consensus forecasts
 #   either with or without US-SPF/Industrial Production
-data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
+data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE, endMonth = 2) {
 
   # Possible future input
   spf_h = NA
@@ -171,7 +171,7 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
   if (is.na(FilterOpt)) {
 
     ### ECB-SPF filtered without US-SPF
-    SPF <- .prep_spf_data()
+    SPF <- .prep_spf_data(Month = endMonth)
 
   } else if (FilterOpt == 'US_SPF') {
     ### ECB-SPF augmented by US-SPF
@@ -180,7 +180,7 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
       ### Prepare SPF data augmented by US-SPF calibrated on the respective forecast horizon h
 
       # Initialize using h = 0
-      SPF <- .prep_spf_data(FilterOpt = FilterOpt, gamma_est = gamma_estimation, spf_h = 0)
+      SPF <- .prep_spf_data(FilterOpt = FilterOpt, gamma_est = gamma_estimation, spf_h = 0, endMonth)
       rgdp_all           <- SPF$rgdp_all
       spf_forecasts_cy   <- SPF$spf_forecasts_cy
       spf_forecasts_ny   <- SPF$spf_forecasts_ny
@@ -189,7 +189,7 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
 
       # Loop over horizons h = 1:3 (or more)
       for (h in 1:3) {
-        SPF <- .prep_spf_data(FilterOpt = 'US_SPF', gamma_est = gamma_estimation, spf_h = h)
+        SPF <- .prep_spf_data(FilterOpt = 'US_SPF', gamma_est = gamma_estimation, spf_h = h, endMonth)
 
         # Update the corresponding columns in the forecasts and evaluation data
         spf_forecasts_cy[[paste0("spf_h", h)]]   <- SPF$spf_forecasts_cy[[paste0("spf_h", h)]]
@@ -202,7 +202,7 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE) {
   } else if (FilterOpt == 'IndProd') {
 
     ### ECB-SPF augmented Industrial Production
-    SPF <- .prep_spf_data(FilterOpt)
+    SPF <- .prep_spf_data(FilterOpt, endMonth)
 
   }
 
