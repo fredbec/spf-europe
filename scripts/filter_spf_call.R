@@ -13,7 +13,7 @@ rtd <- fread(here("data", "revdatpre14.csv")) |>
      by = .(origin_year, origin_month)) |>
   DT(, rgdp := NULL) |>
   DT(!is.na(rgdp_growth))
-# 100 * (log(rgdp) - log(shift(rgdp,1))
+# 400 * (log(rgdp) - log(shift(rgdp,1))
 # or: 100 * ( (rgpd / shift(rgdp,1))^4 - 1 )
 
 
