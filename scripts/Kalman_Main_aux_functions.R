@@ -1,5 +1,5 @@
 ### Read in and merge SPF and RGDP data
-.prep_spf_data <- function(FilterOpt = NA, gamma_est = FALSE, spf_h = NA, Month = 2) {
+.prep_spf_data <- function(FilterOpt = NA, gamma_est = FALSE, spf_h = NA, Month = 1) {
 
   ### Read in filtered quarterly SPF forecasts
   if (is.na(FilterOpt)) {
@@ -50,17 +50,16 @@
   # Merge GDP
   rgdp_pre <- rgdp_pre[ - which(rgdp_pre$origin_year == 2014 & rgdp_pre$origin_month > 9), ]
   rgdp_pre$origin_day <- NA
-  rgdp_all <- rbind(rgdp_pre,rgdp_post)
+  rgdp <- rbind(rgdp_pre,rgdp_post)
 
   # Compute quarterly GDP growth rates
-  rgdp_all <- rgdp_all %>%
+  rgdp_all <- rgdp %>%
     arrange(origin_year, origin_month, target_year, target_quarter) %>%  # ensure correct order
     group_by(origin_year, origin_month) %>%
     mutate(
       gdp_growth = ( (rgdp / lag(rgdp) ) ^ 4 - 1) * 100,
     ) %>%
     ungroup()
-
 
   ### Filtered SPF h = 0, 1, ..., 4 step ahead forecasts
 
@@ -110,7 +109,7 @@
   release <- 2
 
   # Keep second releases
-  rgdp <- rgdp_all %>%
+  rgdp_rel <- rgdp_all %>%
     mutate(
       # Convert to yearqtr (e.g., 2018 Q2 → 2018.25)
       ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q"),
@@ -119,7 +118,7 @@
       origin_date = make_date(origin_year, origin_month, 1)
     )
 
-  rgdp <- rgdp %>%
+  rgdp_rel <- rgdp_rel %>%
     arrange(ref_period, origin_date) %>%
     group_by(ref_period) %>%
     slice(release) %>%
@@ -137,11 +136,11 @@
     mutate(ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q")) %>%
     select(-target_year, -target_quarter)
 
-  evaluation_data_cy <- rgdp %>%
+  evaluation_data_cy <- rgdp_rel %>%
     left_join(spf_forecasts_cy, by = "ref_period") # %>%
   # filter(ref_period >= as.yearqtr("2002 Q1", format = "%Y Q%q"))
 
-  evaluation_data_ny <- rgdp %>%
+  evaluation_data_ny <- rgdp_rel %>%
     left_join(spf_forecasts_ny, by = "ref_period")
 
   spf_forecasts_ny$target_year <- target_aux[,2]
@@ -149,12 +148,72 @@
   spf_forecasts_cy$target_year <- target_aux[,2]
   spf_forecasts_cy$target_quarter <- target_aux[,1]
 
+
+
+  ### Yearly data for yearly evaluation
+
+  # Yearly SPF forecasts
+  spf_yearly <- read.csv("data/spf_median_forecast.csv")
+
+  # Compute yearly GDP growth rates
+  rgdp_yearly <- rgdp %>%
+    arrange(origin_year, origin_month, target_year, target_quarter) %>%  # ensure correct order
+    group_by(origin_year, origin_month) %>%
+    mutate(
+      sum4 = zoo::rollsumr(rgdp, 4, fill = NA),        # sum of t, t-1, t-2, t-3
+      sum4_prev = dplyr::lag(sum4, 4),                 # sum of t-4, t-5, t-6, t-7
+      gdp_yoy_sum = (sum4 / sum4_prev - 1) * 100       # percent change between the two 4-quarter sums
+    ) %>%
+    ungroup()
+
+  ## Fixed month, e.g., origin_month = 3
+  #rgdp_yearly_eval <- rgdp_yearly %>%
+  #  filter(target_quarter == 4,
+  #         origin_month == 3,
+  #         origin_year == target_year + 1)
+
+  # k-th release
+  k_rel <- 3   # possible future input
+
+  rgdp_yearly_eval <- rgdp_yearly %>%
+    filter(
+      target_quarter == 4,
+      origin_year == target_year + 1
+    ) %>%
+    group_by(target_year) %>%
+    arrange(origin_year, origin_month) %>%  # sort by actual release date
+    slice(k_rel) %>%                        # choose k-th release
+    ungroup()
+
+  #plot(rgdp_yearly_eval$gdp_yoy_sum,type="l")
+
+  # Merge annual SPF and annual GDP growth rates
+  spf_annual <- spf_yearly %>%
+    left_join(
+      rgdp_yearly_eval %>% select(target_year, gdp_yearly = gdp_yoy_sum),
+      by = "target_year"
+    ) %>%
+    rename(SPF_yearly = ens_fc)
+
+  # Find all forecast_years with any missing gdp_yearly
+  years_with_na <- spf_annual %>%
+    filter(is.na(gdp_yearly)) %>%
+    pull(forecast_year) %>%
+    unique()
+
+  # Remove all rows where forecast_year is in years_with_na
+  spf_annual <- spf_annual %>%
+    filter(!forecast_year %in% years_with_na)
+
+
+  # Output of this function
   output <- list(
     rgdp_all           = rgdp_all,
     spf_forecasts_cy   = spf_forecasts_cy,
     spf_forecasts_ny   = spf_forecasts_ny,
     evaluation_data_cy = evaluation_data_cy,
-    evaluation_data_ny = evaluation_data_ny
+    evaluation_data_ny = evaluation_data_ny,
+    spf_annual         = spf_annual
   )
 
   return(output)
@@ -163,7 +222,7 @@
 
 ### Wrapper function calling prep_spf_data.R, filtered ECB-SPF consensus forecasts
 #   either with or without US-SPF/Industrial Production
-data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE, endMonth = 2) {
+data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE, endMonth = 1) {
 
   # Possible future input
   spf_h = NA
