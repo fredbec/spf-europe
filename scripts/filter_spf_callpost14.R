@@ -74,6 +74,7 @@ spfdat <- fread(here("data", "spf_consolidated.csv")) |>
                         "ens_fc")) |>
   unique()
 
+data.table::fwrite(spfdat, here("data", "spf_median_forecast.csv"))
 
 SPF_dataUS <- fread(here("data", "spf_us_consolidated.csv"))
 IP_data <- fread(here("data", "ip_consolidated.csv")) |>
