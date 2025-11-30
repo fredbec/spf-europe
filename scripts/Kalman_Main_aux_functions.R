@@ -337,24 +337,204 @@ SPF_bias <- function(spf_data, EvalPeriod = cbind(2002, 2019), DropPeriod = NA) 
 
 
 
+####### HEADER
+SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
+                                    EvalPeriod = cbind(2002, 2019),
+                                    DropPeriod = NA, lagLength = NA) {
+
+
+  # Bring SPF forecasts into wide shape
+  spf_wide <- spf_annual %>%
+    mutate(
+      horizon = case_when(
+        target_year == forecast_year     ~ "SPF_y1",
+        target_year == forecast_year + 1 ~ "SPF_y2"
+      ),
+      ref_period = as.yearqtr(paste0(forecast_year, " Q", forecast_quarter))
+    ) %>%
+    select(forecast_year, forecast_quarter, ref_period, horizon, SPF_yearly) %>%
+    tidyr::pivot_wider(
+      names_from = horizon,
+      values_from = SPF_yearly
+    ) %>%
+    arrange(forecast_year, forecast_quarter) %>%   # ensure time order
+    mutate(
+      SPF_y2 = dplyr::lag(SPF_y2, 4)                # overwrite SPF_y2 with its lag
+    )
+
+
+  # Merge benchmark models
+  model_names <- c("DAR_fc", "IAR_fc", "RWmean_fc", "NoChange_fc")
+
+  EvalData <- purrr::reduce(
+    model_names,
+    .init = spf_wide,
+    .f = function(df, model) {
+      df %>% left_join(AR_bench_yearly[[model]], by = "ref_period")
+    }
+  )
+
+
+
+
+
+
+
+  # Merge SPF and AR-banchmark models
+  evaluation_data <- spf_data %>%
+    left_join(ar_benchmark_data$DAR_fc, by = "ref_period")
+
+  evaluation_data <- evaluation_data %>%
+    left_join(ar_benchmark_data$IAR_fc, by = "ref_period")
+
+  evaluation_data <- evaluation_data %>%
+    left_join(ar_benchmark_data$RWmean_fc, by = "ref_period")
+
+  evaluation_data <- evaluation_data %>%
+    left_join(ar_benchmark_data$NoChange_fc, by = "ref_period")
+
+  # Drop missings
+  evaluation_data <- evaluation_data %>%
+    filter(!(is.na(spf_h0) | is.na(spf_h4)))
+
+  # Adjust sample start and end points
+  evaluation_data <- evaluation_data %>%
+    filter(target_year < (EvalPeriod[2]+1) & target_year > (EvalPeriod[1]-1))
+
+  # Drop periods if specified
+  if (any(!is.na(DropPeriod))) {
+    for (i in 1:dim(DropPeriod)[1]) {
+      evaluation_data <- evaluation_data %>%
+        filter(!(target_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
+    }
+  }
+
+
+  # Compute historical mean of GDP growth as simple benchmark forecast
+  gdp_mean <- mean(evaluation_data$gdp_growth, na.rm = TRUE)
+  actual <- evaluation_data$gdp_growth
+
+
+  ### Root mean squared forecast errors
+
+  # Loop over h = 0 to 4
+  sq_error_loss <- lapply(0:4, function(h) {
+
+    # Compute squared SPF and benchmark errors
+    spf_sq_error       <- (actual - evaluation_data[[paste0("spf_h", h)]])^2
+    benchmark_sq_error <- (actual - gdp_mean)^2
+    dar_sq_error       <- (actual - evaluation_data[[paste0("DAR_h", h)]])^2
+    iar_sq_error       <- (actual - evaluation_data[[paste0("IAR_h", h)]])^2
+    RWmean_sq_error    <- (actual - evaluation_data[[paste0("RWmean_h", h)]])^2
+    NoChange_sq_error  <- (actual - evaluation_data[[paste0("NoChange_h", h)]])^2
+
+    # Compute RMSE
+    spf_mse       <- mean(spf_sq_error)
+    hist_mean_mse <- mean(benchmark_sq_error)
+    DAR_mse       <- mean(dar_sq_error)
+    IAR_mse       <- mean(iar_sq_error)
+    RW_mean_mse   <- mean(RWmean_sq_error)
+    NoChange_mse  <- mean(NoChange_sq_error)
+
+    tibble(
+      horizon = h,
+      spf_rmse       = sqrt(spf_mse),
+      hist_mean_rmse = sqrt(hist_mean_mse),
+      RW_rmse        = sqrt(RW_mean_mse),
+      DAR_rmse       = sqrt(DAR_mse),
+      IAR_rmse       = sqrt(IAR_mse),
+      NoChange_rmse  = sqrt(NoChange_mse)
+    )
+
+  })
+
+
+  ### Diebold-Mariano test
+  n <- length(actual)
+
+  # Loop over h = 0 to 4
+  DM_Test <- lapply(0:4, function(h) {
+
+    # Compute squared SPF and benchmark errors
+    spf_sq_error       <- (actual - evaluation_data[[paste0("spf_h", h)]])^2
+    benchmark_sq_error <- (actual - gdp_mean)^2
+    dar_sq_error       <- (actual - evaluation_data[[paste0("DAR_h", h)]])^2
+    iar_sq_error       <- (actual - evaluation_data[[paste0("IAR_h", h)]])^2
+    RWmean_sq_error    <- (actual - evaluation_data[[paste0("RWmean_h", h)]])^2
+    NoChange_sq_error  <- (actual - evaluation_data[[paste0("NoChange_h", h)]])^2
+
+    # Run DM Tests of competitor models versus SPF
+    Loss_spf_hist_mean <- benchmark_sq_error - spf_sq_error
+    Loss_spf_dar       <- dar_sq_error - spf_sq_error
+    Loss_spf_iar       <- iar_sq_error - spf_sq_error
+    Loss_spf_RWmean    <- RWmean_sq_error - spf_sq_error
+    Loss_spf_NoChange  <- NoChange_sq_error - spf_sq_error
+
+    # Lag length for HAC standard errors
+    if (is.na(lagLength)) {
+      lags <- as.integer( n^0.25 )
+    } else {
+      lags <- lagLength
+    }
+
+    dm_test <- lm(Loss_spf_hist_mean ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+    dm_test_hist_mean <- coef(dm_test) / sqrt(nw_var)
+
+    dm_test <- lm(Loss_spf_dar ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+    dm_test_dar <- coef(dm_test) / sqrt(nw_var)
+
+    dm_test <- lm(Loss_spf_iar ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+    dm_test_iar <- coef(dm_test) / sqrt(nw_var)
+
+    dm_test <- lm(Loss_spf_RWmean ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+    dm_test_rwmean <- coef(dm_test) / sqrt(nw_var)
+
+    dm_test <- lm(Loss_spf_NoChange ~ 1)
+    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+    dm_test_nochange <- coef(dm_test) / sqrt(nw_var)
+
+    tibble(
+      horizon = h,
+      spf_hist_mean = dm_test_hist_mean,
+      SPF_RW_mean = dm_test_rwmean,
+      spf_DAR = dm_test_dar,
+      spf_IAR = dm_test_iar,
+      spf_NoChange = dm_test_nochange
+    )
+
+  })
+
+  RMSE <- bind_rows(sq_error_loss)
+  DM_Test <- bind_rows(DM_Test)
+
+  output <- list(RMSE = RMSE, DM_Test = DM_Test)
+  return(output)
+}
+
+
+
 
 ####### HEADER
-SPF_RMSE_DM_Test <- function(spf_data, ar_benchmak_data,
+SPF_RMSE_DM_Test <- function(spf_data, ar_benchmark_data,
                              EvalPeriod = cbind(2002, 2019),
                              DropPeriod = NA, lagLength = NA) {
 
   # Merge SPF and AR-banchmark models
   evaluation_data <- spf_data %>%
-    left_join(ar_benchmak_data$DAR_fc, by = "ref_period")
+    left_join(ar_benchmark_data$DAR_fc, by = "ref_period")
 
   evaluation_data <- evaluation_data %>%
-    left_join(ar_benchmak_data$IAR_fc, by = "ref_period")
+    left_join(ar_benchmark_data$IAR_fc, by = "ref_period")
 
   evaluation_data <- evaluation_data %>%
-    left_join(ar_benchmak_data$RWmean_fc, by = "ref_period")
+    left_join(ar_benchmark_data$RWmean_fc, by = "ref_period")
 
   evaluation_data <- evaluation_data %>%
-    left_join(ar_benchmak_data$NoChange_fc, by = "ref_period")
+    left_join(ar_benchmark_data$NoChange_fc, by = "ref_period")
 
   # Drop missings
   evaluation_data <- evaluation_data %>%
