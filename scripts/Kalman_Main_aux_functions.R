@@ -374,7 +374,27 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
     }
   )
 
+  # Delete initial years without next-year forecasts of benchmark models and
+  # insert NA for benchmark forecasts where SPF didn't provide next-year
+  # forecasts for 2021 in 2020-Q1
+  next_year_cols <- paste0(model_names, "2")
+  EvalData <- EvalData %>%
+    filter(!is.na(.data[[next_year_cols[1]]])) %>%
+    mutate(across(all_of(next_year_cols),
+                  ~ if_else(forecast_year == 2021 & forecast_quarter == 1, NA_real_, .)))
 
+
+  # Adjust sample start and end points
+  EvalData <- EvalData %>%
+    filter(forecast_year < (EvalPeriod[2]+1) & forecast_year > (EvalPeriod[1]-1))
+
+  # Drop periods if specified
+  if (any(!is.na(DropPeriod))) {
+    for (i in 1:dim(DropPeriod)[1]) {
+      EvalData <- EvalData %>%
+        filter(!(forecast_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
+    }
+  }
 
 
 
