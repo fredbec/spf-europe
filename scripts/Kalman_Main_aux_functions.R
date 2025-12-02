@@ -342,6 +342,7 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
                                     EvalPeriod = cbind(2002, 2019),
                                     DropPeriod = NA, lagLength = NA) {
 
+  library(purrr)
 
   # Bring SPF forecasts into wide shape
   spf_wide <- spf_annual %>%
@@ -361,6 +362,15 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
     mutate(
       SPF_y2 = dplyr::lag(SPF_y2, 4)                # overwrite SPF_y2 with its lag
     )
+
+  # Merge GDP realizations to SPF
+  gdp_merge <- spf_annual %>%
+    select(target_year, gdp_yearly) %>%
+    distinct() %>%
+    rename(forecast_year = target_year)
+
+  spf_wide <- spf_wide %>%
+    left_join(gdp_merge, by = "forecast_year")
 
 
   # Merge benchmark models
@@ -396,142 +406,100 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
     }
   }
 
-
-
-
-
-  # Merge SPF and AR-banchmark models
-  evaluation_data <- spf_data %>%
-    left_join(ar_benchmark_data$DAR_fc, by = "ref_period")
-
-  evaluation_data <- evaluation_data %>%
-    left_join(ar_benchmark_data$IAR_fc, by = "ref_period")
-
-  evaluation_data <- evaluation_data %>%
-    left_join(ar_benchmark_data$RWmean_fc, by = "ref_period")
-
-  evaluation_data <- evaluation_data %>%
-    left_join(ar_benchmark_data$NoChange_fc, by = "ref_period")
-
-  # Drop missings
-  evaluation_data <- evaluation_data %>%
-    filter(!(is.na(spf_h0) | is.na(spf_h4)))
-
-  # Adjust sample start and end points
-  evaluation_data <- evaluation_data %>%
-    filter(target_year < (EvalPeriod[2]+1) & target_year > (EvalPeriod[1]-1))
-
-  # Drop periods if specified
-  if (any(!is.na(DropPeriod))) {
-    for (i in 1:dim(DropPeriod)[1]) {
-      evaluation_data <- evaluation_data %>%
-        filter(!(target_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
-    }
-  }
-
-
   # Compute historical mean of GDP growth as simple benchmark forecast
-  gdp_mean <- mean(evaluation_data$gdp_growth, na.rm = TRUE)
-  actual <- evaluation_data$gdp_growth
+  gdp_mean <- mean(EvalData$gdp_yearly[EvalData$forecast_quarter==1])
 
 
   ### Root mean squared forecast errors
 
-  # Loop over h = 0 to 4
-  sq_error_loss <- lapply(0:4, function(h) {
+  # Define horizons and quarters
+  horizons <- 2:1
+  quarters <- 1:4
 
-    # Compute squared SPF and benchmark errors
-    spf_sq_error       <- (actual - evaluation_data[[paste0("spf_h", h)]])^2
-    benchmark_sq_error <- (actual - gdp_mean)^2
-    dar_sq_error       <- (actual - evaluation_data[[paste0("DAR_h", h)]])^2
-    iar_sq_error       <- (actual - evaluation_data[[paste0("IAR_h", h)]])^2
-    RWmean_sq_error    <- (actual - evaluation_data[[paste0("RWmean_h", h)]])^2
-    NoChange_sq_error  <- (actual - evaluation_data[[paste0("NoChange_h", h)]])^2
+  # Loop over horizons and quarters to compute RMSE tables
+  RMSE_yearly <- map_dfr(horizons, function(h) {
+    map_dfr(quarters, function(q) {
+      # Filter for forecast quarter q
+      df_sub <- EvalData %>% filter(forecast_quarter == q)
 
-    # Compute RMSE
-    spf_mse       <- mean(spf_sq_error)
-    hist_mean_mse <- mean(benchmark_sq_error)
-    DAR_mse       <- mean(dar_sq_error)
-    IAR_mse       <- mean(iar_sq_error)
-    RW_mean_mse   <- mean(RWmean_sq_error)
-    NoChange_mse  <- mean(NoChange_sq_error)
+      # Select actual values and corresponding forecast for horizon h
+      actual <- df_sub$gdp_yearly
+      spf_fc <- if (h == 1) df_sub$SPF_y1 else df_sub$SPF_y2
+      DAR_fc <- df_sub[[paste0("DAR_fc", h)]]   # Adjust if names differ
+      IAR_fc <- df_sub[[paste0("IAR_fc", h)]]
+      RWmean_fc <- df_sub[[paste0("RWmean_fc", h)]]
+      NoChange_fc <- df_sub[[paste0("NoChange_fc", h)]]
 
-    tibble(
-      horizon = h,
-      spf_rmse       = sqrt(spf_mse),
-      hist_mean_rmse = sqrt(hist_mean_mse),
-      RW_rmse        = sqrt(RW_mean_mse),
-      DAR_rmse       = sqrt(DAR_mse),
-      IAR_rmse       = sqrt(IAR_mse),
-      NoChange_rmse  = sqrt(NoChange_mse)
-    )
+      # Compute squared errors
+      spf_sq_error      <- (actual - spf_fc)^2
+      DAR_sq_error      <- (actual - DAR_fc)^2
+      IAR_sq_error      <- (actual - IAR_fc)^2
+      RWmean_sq_error   <- (actual - RWmean_fc)^2
+      NoChange_sq_error <- (actual - NoChange_fc)^2
 
+      # Compute RMSE (handle possible NAs)
+      tibble(
+        horizon = h,
+        forecast_quarter = q,
+        spf_rmse       = sqrt(mean(spf_sq_error, na.rm = TRUE)),
+        DAR_rmse       = sqrt(mean(DAR_sq_error, na.rm = TRUE)),
+        IAR_rmse       = sqrt(mean(IAR_sq_error, na.rm = TRUE)),
+        RWmean_rmse    = sqrt(mean(RWmean_sq_error, na.rm = TRUE)),
+        NoChange_rmse  = sqrt(mean(NoChange_sq_error, na.rm = TRUE))
+      )
+    })
   })
 
 
-  ### Diebold-Mariano test
-  n <- length(actual)
+  DM_Test_yearly <- map_dfr(horizons, function(h) {
+    map_dfr(quarters, function(q) {
+      df_sub <- EvalData %>% filter(forecast_quarter == q)
 
-  # Loop over h = 0 to 4
-  DM_Test <- lapply(0:4, function(h) {
+      actual <- df_sub$gdp_yearly
+      spf_fc <- if (h == 1) df_sub$SPF_y1 else df_sub$SPF_y2
 
-    # Compute squared SPF and benchmark errors
-    spf_sq_error       <- (actual - evaluation_data[[paste0("spf_h", h)]])^2
-    benchmark_sq_error <- (actual - gdp_mean)^2
-    dar_sq_error       <- (actual - evaluation_data[[paste0("DAR_h", h)]])^2
-    iar_sq_error       <- (actual - evaluation_data[[paste0("IAR_h", h)]])^2
-    RWmean_sq_error    <- (actual - evaluation_data[[paste0("RWmean_h", h)]])^2
-    NoChange_sq_error  <- (actual - evaluation_data[[paste0("NoChange_h", h)]])^2
+      DAR_fc <- df_sub[[paste0("DAR_fc", h)]]
+      IAR_fc <- df_sub[[paste0("IAR_fc", h)]]
+      RWmean_fc <- df_sub[[paste0("RWmean_fc", h)]]
+      NoChange_fc <- df_sub[[paste0("NoChange_fc", h)]]
 
-    # Run DM Tests of competitor models versus SPF
-    Loss_spf_hist_mean <- benchmark_sq_error - spf_sq_error
-    Loss_spf_dar       <- dar_sq_error - spf_sq_error
-    Loss_spf_iar       <- iar_sq_error - spf_sq_error
-    Loss_spf_RWmean    <- RWmean_sq_error - spf_sq_error
-    Loss_spf_NoChange  <- NoChange_sq_error - spf_sq_error
+      spf_sq_error       <- (actual - spf_fc)^2
+      benchmark_sq_error <- (actual - DAR_fc)^2
+      dar_sq_error       <- (actual - DAR_fc)^2
+      iar_sq_error       <- (actual - IAR_fc)^2
+      RWmean_sq_error    <- (actual - RWmean_fc)^2
+      NoChange_sq_error  <- (actual - NoChange_fc)^2
 
-    # Lag length for HAC standard errors
-    if (is.na(lagLength)) {
-      lags <- as.integer( n^0.25 )
-    } else {
-      lags <- lagLength
-    }
+      Loss_spf_hist_mean <- benchmark_sq_error - spf_sq_error
+      Loss_spf_dar       <- dar_sq_error - spf_sq_error
+      Loss_spf_iar       <- iar_sq_error - spf_sq_error
+      Loss_spf_RWmean    <- RWmean_sq_error - spf_sq_error
+      Loss_spf_NoChange  <- NoChange_sq_error - spf_sq_error
 
-    dm_test <- lm(Loss_spf_hist_mean ~ 1)
-    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
-    dm_test_hist_mean <- coef(dm_test) / sqrt(nw_var)
+      n <- length(Loss_spf_hist_mean)
 
-    dm_test <- lm(Loss_spf_dar ~ 1)
-    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
-    dm_test_dar <- coef(dm_test) / sqrt(nw_var)
+      lags <- if (is.na(lagLength)) as.integer(n^0.25) else lagLength
 
-    dm_test <- lm(Loss_spf_iar ~ 1)
-    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
-    dm_test_iar <- coef(dm_test) / sqrt(nw_var)
+      # Define a helper function to run DM test and get statistic
+      run_dm_test <- function(loss_diff) {
+        dm_test <- lm(loss_diff ~ 1)
+        nw_var <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+        coef(dm_test) / sqrt(nw_var)
+      }
 
-    dm_test <- lm(Loss_spf_RWmean ~ 1)
-    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
-    dm_test_rwmean <- coef(dm_test) / sqrt(nw_var)
-
-    dm_test <- lm(Loss_spf_NoChange ~ 1)
-    nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
-    dm_test_nochange <- coef(dm_test) / sqrt(nw_var)
-
-    tibble(
-      horizon = h,
-      spf_hist_mean = dm_test_hist_mean,
-      SPF_RW_mean = dm_test_rwmean,
-      spf_DAR = dm_test_dar,
-      spf_IAR = dm_test_iar,
-      spf_NoChange = dm_test_nochange
-    )
-
+      tibble(
+        horizon = h,
+        forecast_quarter = q,
+        spf_hist_mean = run_dm_test(Loss_spf_hist_mean),
+        spf_DAR       = run_dm_test(Loss_spf_dar),
+        spf_IAR       = run_dm_test(Loss_spf_iar),
+        spf_RWmean    = run_dm_test(Loss_spf_RWmean),
+        spf_NoChange  = run_dm_test(Loss_spf_NoChange)
+      )
+    })
   })
 
-  RMSE <- bind_rows(sq_error_loss)
-  DM_Test <- bind_rows(DM_Test)
-
-  output <- list(RMSE = RMSE, DM_Test = DM_Test)
+  output <- list(RMSE_yearly = RMSE_yearly, DM_Test_yearly = DM_Test_yearly)
   return(output)
 }
 
