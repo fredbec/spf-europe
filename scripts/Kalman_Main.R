@@ -102,7 +102,6 @@ AR_bench_yearly <- AR_benchmark_yearly(rgdp_all, ar_length = 30,
                                        endMonth = 2)
 
 
-
 ### Bias of SPF forecasts
 dropYears  <- NA # cbind(2009, 2010)
 evalPeriod <- cbind(2002,2019)
@@ -116,7 +115,7 @@ SPF_bias(spf_data_ny,DropPeriod = dropYears, EvalPeriod = evalPeriod)
 
 ### Yearly forecast evaluation
 RMSE_yearly <- SPF_RMSE_DM_Test_yearly(spf_annual, AR_bench_yearly,
-                                       EvalPeriod = evalPeriod)
+                                       EvalPeriod = cbind(2005,2019))
 
 # Evaluation data (CY versus NY) and benchmark models
 RMSE_quarterly <- SPF_RMSE_DM_Test(spf_data_cy, AR_bench_quarterly,

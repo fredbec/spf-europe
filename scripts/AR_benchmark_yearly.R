@@ -62,6 +62,12 @@ AR_benchmark_yearly = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, e
     DAR_fc2 = NA_real_
   )
 
+  fc_DAR_alt <- tibble(
+    ref_period = as.yearqtr(ref_qtrs),
+    DAR_alt_fc1 = NA_real_,
+    DAR_alt_fc2 = NA_real_
+  )
+
   fc_IAR <- tibble(
     ref_period = as.yearqtr(ref_qtrs),
     IAR_fc1 = NA_real_,
@@ -95,17 +101,44 @@ AR_benchmark_yearly = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, e
     # Read out vintage
     vintage_data <- rgdp %>% filter(origin_year == this_year, origin_month == this_month)
 
+    # Latest available quartery GDP
+    q_last <- vintage_data$target_quarter[dim(vintage_data)[1]]
+
     # Compute annual real-time GDP growth rates
     vintage_data <- vintage_data %>%
-      arrange(origin_year, origin_month, target_year, target_quarter) %>%  # ensure correct order
+      arrange(origin_year, origin_month, target_year, target_quarter) %>%
       group_by(origin_year, origin_month) %>%
-      mutate(
-        sum4 = zoo::rollsumr(rgdp, 4, fill = NA),        # sum of t, t-1, t-2, t-3
-        sum4_prev = dplyr::lag(sum4, 4),                 # sum of t-4, t-5, t-6, t-7
-        gdp_yearly = (sum4 / sum4_prev - 1) * 100        # percent change between the two 4-quarter sums
-      ) %>%
+
+      # ---- 1. Annual real-time growth ----
+    mutate(
+      sum4      = zoo::rollsumr(rgdp, 4, fill = NA),  # y_t + y_{t-1} + y_{t-2} + y_{t-3}
+      sum4_prev = dplyr::lag(sum4, 4),                # previous year's 4-quarter sum
+      gdp_yearly = (sum4 / sum4_prev - 1) * 100
+    ) %>%
+
+      # ---- 2. Construct YTD for each vintage ----
+    # YTD = average growth rate of observed quarters in the target year
+    mutate(
+      YTD = ifelse(target_quarter == 1, gdp_growth,
+                   ifelse(target_quarter == 2,
+                          (gdp_growth + dplyr::lag(gdp_growth, 1))/2,
+                          ifelse(target_quarter == 3,
+                                 (gdp_growth + dplyr::lag(gdp_growth, 1) + dplyr::lag(gdp_growth, 2))/3,
+                                 # target_quarter == 4
+                                 (gdp_growth + dplyr::lag(gdp_growth, 1) +
+                                    dplyr::lag(gdp_growth, 2) + dplyr::lag(gdp_growth, 3))/4
+                          )))
+    )
+
+    # Latest observation for prediction
+    YTD_last <- vintage_data$YTD[dim(vintage_data)[1]]
+
+    # Keep yearly model variables
+    vintage_data <- vintage_data %>%
+      mutate(YTD = lag(YTD,(4-q_last))) %>%
       filter(target_quarter == 4) %>%
       filter(!is.na(gdp_yearly))
+
 
     # Lag order
     T <- dim(vintage_data)[1]
@@ -147,6 +180,44 @@ AR_benchmark_yearly = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, e
     # Current and next year forecasts
     fc_DAR$DAR_fc1[i] <- coefficients(dar_fc1) %*% t(cbind(1, t(gdp_latest)))
     fc_DAR$DAR_fc2[i] <- coefficients(dar_fc2) %*% t(cbind(1, t(gdp_latest)))
+
+
+    ### Direct forecasts DAR(p) including latest gdp growth rates
+
+    if (q_last == 4) {
+      # Current year forecasts
+      predictors_fc1 <- paste0("lag_", lag_years:(lag_years + max_lag - 1))
+      formula_fc1 <- as.formula(paste("gdp_yearly ~", paste(predictors_fc1, collapse = " + ")))
+
+      # Next year forecasts
+      predictors_fc2 <- paste0("lag_", (lag_years+1):(lag_years + max_lag))
+      formula_fc2 <- as.formula(paste("gdp_yearly ~", paste(predictors_fc2, collapse = " + ")))
+
+    } else {
+      # Current year forecasts
+      predictors_fc1 <- c(paste0("lag_", lag_years:(lag_years + max_lag - 1)), "YTD")
+      formula_fc1 <- as.formula(paste("gdp_yearly ~", paste(predictors_fc1, collapse = " + ")))
+
+      # Next year forecasts
+      predictors_fc2 <- c(paste0("lag_", (lag_years+1):(lag_years + max_lag)), "YTD")
+      formula_fc2 <- as.formula(paste("gdp_yearly ~", paste(predictors_fc2, collapse = " + ")))
+
+    }
+
+
+    # Run regressions
+    dar_alt_fc1 <- lm(formula_fc1, data = vintage_data)
+    dar_alt_fc2 <- lm(formula_fc2, data = vintage_data)
+
+    # Current and next year forecasts
+    if (q_last == 4) {
+      fc_DAR_alt$DAR_alt_fc1[i] <- coefficients(dar_alt_fc1) %*% t(cbind(1, t(gdp_latest)))
+      fc_DAR_alt$DAR_alt_fc2[i] <- coefficients(dar_alt_fc2) %*% t(cbind(1, t(gdp_latest)))
+
+    } else {
+      fc_DAR_alt$DAR_alt_fc1[i] <- coefficients(dar_alt_fc1) %*% t(cbind(1, t(gdp_latest), YTD_last))
+      fc_DAR_alt$DAR_alt_fc2[i] <- coefficients(dar_alt_fc2) %*% t(cbind(1, t(gdp_latest), YTD_last))
+    }
 
 
     ### Indirect forecasts IAR(p)
@@ -197,6 +268,7 @@ AR_benchmark_yearly = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, e
 
   # Lag next year forecasts by four quarters
   fc_DAR$DAR_fc2           <- lag(fc_DAR$DAR_fc2,4)
+  fc_DAR_alt$DAR_alt_fc2   <- lag(fc_DAR_alt$DAR_alt_fc2,4)
   fc_IAR$IAR_fc2           <- lag(fc_IAR$IAR_fc2,4)
   fc_RWmean$RWmean_fc2     <- lag(fc_RWmean$RWmean_fc1,4)
   fc_NoChange$NoChange_fc2 <- lag(fc_NoChange$NoChange_fc1,4)
@@ -204,6 +276,7 @@ AR_benchmark_yearly = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, e
   # Define output of this function
   Output <- list(
     DAR_fc      = fc_DAR,
+    DAR_alt_fc  = fc_DAR_alt,
     IAR_fc      = fc_IAR,
     RWmean_fc   = fc_RWmean,
     NoChange_fc = fc_NoChange

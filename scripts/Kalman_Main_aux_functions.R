@@ -374,7 +374,7 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
 
 
   # Merge benchmark models
-  model_names <- c("DAR_fc", "IAR_fc", "RWmean_fc", "NoChange_fc")
+  model_names <- c("DAR_fc", "DAR_alt_fc", "IAR_fc", "RWmean_fc", "NoChange_fc")
 
   EvalData <- purrr::reduce(
     model_names,
@@ -423,16 +423,18 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
       df_sub <- EvalData %>% filter(forecast_quarter == q)
 
       # Select actual values and corresponding forecast for horizon h
-      actual <- df_sub$gdp_yearly
-      spf_fc <- if (h == 1) df_sub$SPF_y1 else df_sub$SPF_y2
-      DAR_fc <- df_sub[[paste0("DAR_fc", h)]]   # Adjust if names differ
-      IAR_fc <- df_sub[[paste0("IAR_fc", h)]]
-      RWmean_fc <- df_sub[[paste0("RWmean_fc", h)]]
+      actual      <- df_sub$gdp_yearly
+      spf_fc      <- if (h == 1) df_sub$SPF_y1 else df_sub$SPF_y2
+      DAR_fc      <- df_sub[[paste0("DAR_fc", h)]]
+      DAR_alt_fc  <- df_sub[[paste0("DAR_alt_fc", h)]]
+      IAR_fc      <- df_sub[[paste0("IAR_fc", h)]]
+      RWmean_fc   <- df_sub[[paste0("RWmean_fc", h)]]
       NoChange_fc <- df_sub[[paste0("NoChange_fc", h)]]
 
       # Compute squared errors
       spf_sq_error      <- (actual - spf_fc)^2
       DAR_sq_error      <- (actual - DAR_fc)^2
+      DAR_alt_sq_error  <- (actual - DAR_alt_fc)^2
       IAR_sq_error      <- (actual - IAR_fc)^2
       RWmean_sq_error   <- (actual - RWmean_fc)^2
       NoChange_sq_error <- (actual - NoChange_fc)^2
@@ -443,6 +445,7 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
         forecast_quarter = q,
         spf_rmse       = sqrt(mean(spf_sq_error, na.rm = TRUE)),
         DAR_rmse       = sqrt(mean(DAR_sq_error, na.rm = TRUE)),
+        DAR_alt_rmse   = sqrt(mean(DAR_alt_sq_error, na.rm = TRUE)),
         IAR_rmse       = sqrt(mean(IAR_sq_error, na.rm = TRUE)),
         RWmean_rmse    = sqrt(mean(RWmean_sq_error, na.rm = TRUE)),
         NoChange_rmse  = sqrt(mean(NoChange_sq_error, na.rm = TRUE))
@@ -458,20 +461,23 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
       actual <- df_sub$gdp_yearly
       spf_fc <- if (h == 1) df_sub$SPF_y1 else df_sub$SPF_y2
 
-      DAR_fc <- df_sub[[paste0("DAR_fc", h)]]
-      IAR_fc <- df_sub[[paste0("IAR_fc", h)]]
-      RWmean_fc <- df_sub[[paste0("RWmean_fc", h)]]
+      DAR_fc      <- df_sub[[paste0("DAR_fc", h)]]
+      DAR_alt_fc  <- df_sub[[paste0("DAR_alt_fc", h)]]
+      IAR_fc      <- df_sub[[paste0("IAR_fc", h)]]
+      RWmean_fc   <- df_sub[[paste0("RWmean_fc", h)]]
       NoChange_fc <- df_sub[[paste0("NoChange_fc", h)]]
 
       spf_sq_error       <- (actual - spf_fc)^2
       benchmark_sq_error <- (actual - DAR_fc)^2
       dar_sq_error       <- (actual - DAR_fc)^2
+      dar_alt_sq_error   <- (actual - DAR_alt_fc)^2
       iar_sq_error       <- (actual - IAR_fc)^2
       RWmean_sq_error    <- (actual - RWmean_fc)^2
       NoChange_sq_error  <- (actual - NoChange_fc)^2
 
       Loss_spf_hist_mean <- benchmark_sq_error - spf_sq_error
       Loss_spf_dar       <- dar_sq_error - spf_sq_error
+      Loss_spf_dar_alt   <- dar_alt_sq_error - spf_sq_error
       Loss_spf_iar       <- iar_sq_error - spf_sq_error
       Loss_spf_RWmean    <- RWmean_sq_error - spf_sq_error
       Loss_spf_NoChange  <- NoChange_sq_error - spf_sq_error
@@ -492,6 +498,7 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
         forecast_quarter = q,
         spf_hist_mean = run_dm_test(Loss_spf_hist_mean),
         spf_DAR       = run_dm_test(Loss_spf_dar),
+        spf_DAR_alt   = run_dm_test(Loss_spf_dar_alt),
         spf_IAR       = run_dm_test(Loss_spf_iar),
         spf_RWmean    = run_dm_test(Loss_spf_RWmean),
         spf_NoChange  = run_dm_test(Loss_spf_NoChange)
