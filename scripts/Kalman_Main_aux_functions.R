@@ -482,6 +482,79 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
       Loss_spf_RWmean    <- RWmean_sq_error - spf_sq_error
       Loss_spf_NoChange  <- NoChange_sq_error - spf_sq_error
 
+
+      #### Optional quick and dirty plots - squared losses
+      plot_true = FALSE
+      if (plot_true == TRUE) {
+
+        # Collect all series in one list
+        all_errors <- list(
+          spf_sq_error,
+          #dar_sq_error,
+          dar_alt_sq_error#,
+          #iar_sq_error,
+          #RWmean_sq_error,
+          #NoChange_sq_error
+        )
+
+        # Determine y-axis limits
+        ymin <- min(sapply(all_errors, min), na.rm = TRUE)
+        ymax <- max(sapply(all_errors, max), na.rm = TRUE)
+
+        # Plot
+        plot(spf_sq_error, type = "l", lwd = 2, col = 1,
+             ylab = "Squared Error", xlab = "Index",
+             ylim = c(ymin, ymax),
+             main = "Squared Errors Over Time")
+
+        lines(dar_sq_error,       col = 2, lwd = 2)
+        lines(dar_alt_sq_error,   col = 3, lwd = 2)
+        lines(iar_sq_error,       col = 4, lwd = 2)
+        lines(RWmean_sq_error,    col = 5, lwd = 2)
+        lines(NoChange_sq_error,  col = 6, lwd = 2)
+
+        legend("topright",
+               legend = c("SPF", "DAR", "DAR_alt", "IAR", "RWmean", "NoChange"),
+               col    = 1:6,
+               lwd    = 2)
+
+
+
+        #### Optional quick and dirty plots - loss differences
+
+        # Collect all series in one list
+        all_errors <- list(
+          #Loss_spf_hist_mean,
+          #Loss_spf_dar,
+          Loss_spf_dar_alt#,
+          #Loss_spf_iar,
+          #Loss_spf_RWmean,
+          #Loss_spf_NoChange
+        )
+
+        # Determine y-axis limits
+        ymin <- min(sapply(all_errors, min), na.rm = TRUE)
+        ymax <- max(sapply(all_errors, max), na.rm = TRUE)
+
+        # Plot
+        plot(Loss_spf_dar, type = "l", lwd = 2, col = 1,
+             ylab = "Squared Error", xlab = "Index",
+             ylim = c(ymin, ymax),
+             main = "Loss Differences Over Time")
+
+        lines(Loss_spf_dar_alt,   col = 2, lwd = 2)
+        lines(Loss_spf_iar,       col = 3, lwd = 2)
+        lines(Loss_spf_RWmean,    col = 4, lwd = 2)
+        lines(Loss_spf_NoChange,  col = 5, lwd = 2)
+
+        legend("topright",
+               legend = c("DAR", "DAR_alt", "IAR", "RWmean", "NoChange"),
+               col    = 1:6,
+               lwd    = 2)
+      }
+
+
+
       n <- length(Loss_spf_hist_mean)
 
       lags <- if (is.na(lagLength)) as.integer(n^0.25) else lagLength

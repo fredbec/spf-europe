@@ -115,7 +115,7 @@ SPF_bias(spf_data_ny,DropPeriod = dropYears, EvalPeriod = evalPeriod)
 
 ### Yearly forecast evaluation
 RMSE_yearly <- SPF_RMSE_DM_Test_yearly(spf_annual, AR_bench_yearly,
-                                       EvalPeriod = cbind(2005,2019))
+                                       EvalPeriod = evalPeriod)
 
 # Evaluation data (CY versus NY) and benchmark models
 RMSE_quarterly <- SPF_RMSE_DM_Test(spf_data_cy, AR_bench_quarterly,
