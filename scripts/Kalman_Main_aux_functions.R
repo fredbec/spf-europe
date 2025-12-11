@@ -106,7 +106,7 @@
   ### Actuals of RGDP
 
   # First or second release of RGDP as actuals
-  release <- 2
+  release <- 3
 
   # Keep second releases
   rgdp_rel <- rgdp_all %>%
