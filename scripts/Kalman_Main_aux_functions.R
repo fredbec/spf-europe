@@ -398,6 +398,9 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
   EvalData <- EvalData %>%
     filter(forecast_year < (EvalPeriod[2]+1) & forecast_year > (EvalPeriod[1]-1))
 
+  # Compute historical mean of GDP growth as simple benchmark forecast
+  gdp_mean <- mean(EvalData$gdp_yearly[EvalData$forecast_quarter==1])
+
   # Drop periods if specified
   if (any(!is.na(DropPeriod))) {
     for (i in 1:dim(DropPeriod)[1]) {
@@ -405,9 +408,6 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
         filter(!(forecast_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
     }
   }
-
-  # Compute historical mean of GDP growth as simple benchmark forecast
-  gdp_mean <- mean(EvalData$gdp_yearly[EvalData$forecast_quarter==1])
 
 
   ### Root mean squared forecast errors
@@ -438,6 +438,7 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
       IAR_sq_error      <- (actual - IAR_fc)^2
       RWmean_sq_error   <- (actual - RWmean_fc)^2
       NoChange_sq_error <- (actual - NoChange_fc)^2
+      Histmean_sq_error <- (actual - gdp_mean)^2
 
       # Compute RMSE (handle possible NAs)
       tibble(
@@ -448,7 +449,8 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
         DAR_alt_rmse   = sqrt(mean(DAR_alt_sq_error, na.rm = TRUE)),
         IAR_rmse       = sqrt(mean(IAR_sq_error, na.rm = TRUE)),
         RWmean_rmse    = sqrt(mean(RWmean_sq_error, na.rm = TRUE)),
-        NoChange_rmse  = sqrt(mean(NoChange_sq_error, na.rm = TRUE))
+        NoChange_rmse  = sqrt(mean(NoChange_sq_error, na.rm = TRUE)),
+        Histmean_rmse  = sqrt(mean(Histmean_sq_error, na.rm = TRUE))
       )
     })
   })
@@ -468,19 +470,19 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
       NoChange_fc <- df_sub[[paste0("NoChange_fc", h)]]
 
       spf_sq_error       <- (actual - spf_fc)^2
-      benchmark_sq_error <- (actual - DAR_fc)^2
       dar_sq_error       <- (actual - DAR_fc)^2
       dar_alt_sq_error   <- (actual - DAR_alt_fc)^2
       iar_sq_error       <- (actual - IAR_fc)^2
       RWmean_sq_error    <- (actual - RWmean_fc)^2
       NoChange_sq_error  <- (actual - NoChange_fc)^2
+      Histmean_sq_error  <- (actual - gdp_mean)^2
 
-      Loss_spf_hist_mean <- benchmark_sq_error - spf_sq_error
-      Loss_spf_dar       <- dar_sq_error - spf_sq_error
-      Loss_spf_dar_alt   <- dar_alt_sq_error - spf_sq_error
-      Loss_spf_iar       <- iar_sq_error - spf_sq_error
-      Loss_spf_RWmean    <- RWmean_sq_error - spf_sq_error
-      Loss_spf_NoChange  <- NoChange_sq_error - spf_sq_error
+      Loss_spf_dar      <- dar_sq_error - spf_sq_error
+      Loss_spf_dar_alt  <- dar_alt_sq_error - spf_sq_error
+      Loss_spf_iar      <- iar_sq_error - spf_sq_error
+      Loss_spf_RWmean   <- RWmean_sq_error - spf_sq_error
+      Loss_spf_NoChange <- NoChange_sq_error - spf_sq_error
+      Loss_spf_Histmean <- Histmean_sq_error - spf_sq_error
 
 
       #### Optional quick and dirty plots - squared losses
@@ -512,10 +514,11 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
         lines(iar_sq_error,       col = 4, lwd = 2)
         lines(RWmean_sq_error,    col = 5, lwd = 2)
         lines(NoChange_sq_error,  col = 6, lwd = 2)
+        lines(Histmean_sq_error,  col = 7, lwd = 2)
 
         legend("topright",
-               legend = c("SPF", "DAR", "DAR_alt", "IAR", "RWmean", "NoChange"),
-               col    = 1:6,
+               legend = c("SPF", "DAR", "DAR_alt", "IAR", "RWmean", "NoChange", "HistMean"),
+               col    = 1:7,
                lwd    = 2)
 
 
@@ -546,16 +549,17 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
         lines(Loss_spf_iar,       col = 3, lwd = 2)
         lines(Loss_spf_RWmean,    col = 4, lwd = 2)
         lines(Loss_spf_NoChange,  col = 5, lwd = 2)
+        lines(Loss_spf_Histmean,  col = 6, lwd = 2)
 
         legend("topright",
-               legend = c("DAR", "DAR_alt", "IAR", "RWmean", "NoChange"),
+               legend = c("DAR", "DAR_alt", "IAR", "RWmean", "NoChange", "Histmean"),
                col    = 1:6,
                lwd    = 2)
       }
 
 
 
-      n <- length(Loss_spf_hist_mean)
+      n <- length(Loss_spf_dar_alt)
 
       lags <- if (is.na(lagLength)) as.integer(n^0.25) else lagLength
 
@@ -569,17 +573,41 @@ SPF_RMSE_DM_Test_yearly <- function(spf_data, ar_benchmark_data,
       tibble(
         horizon = h,
         forecast_quarter = q,
-        spf_hist_mean = run_dm_test(Loss_spf_hist_mean),
         spf_DAR       = run_dm_test(Loss_spf_dar),
         spf_DAR_alt   = run_dm_test(Loss_spf_dar_alt),
         spf_IAR       = run_dm_test(Loss_spf_iar),
         spf_RWmean    = run_dm_test(Loss_spf_RWmean),
-        spf_NoChange  = run_dm_test(Loss_spf_NoChange)
+        spf_NoChange  = run_dm_test(Loss_spf_NoChange),
+        spf_HistMean  = run_dm_test(Loss_spf_Histmean)
       )
     })
   })
 
-  output <- list(RMSE_yearly = RMSE_yearly, DM_Test_yearly = DM_Test_yearly)
+
+  # Function to convert DM statistic into star code
+  dm_to_stars <- function(x) {
+    sx <- sign(x)
+    ax <- abs(x)
+
+    d <- case_when(
+      ax < 1.645 ~ 0,
+      ax < 1.96  ~ 1,
+      ax < 2.576 ~ 2,
+      TRUE       ~ 3
+    )
+
+    return(sx * d)
+  }
+
+  # Apply to all DM columns except 'horizon'
+  DM_stars <- DM_Test_yearly %>%
+    mutate(across(
+      .cols = -c(horizon, forecast_quarter),
+      .fns  = dm_to_stars,
+      .names = "{.col}"
+    ))
+
+  output <- list(RMSE_yearly = RMSE_yearly, DM_Test_yearly = DM_Test_yearly, DM_stars_yearly = DM_stars)
   return(output)
 }
 
@@ -650,11 +678,11 @@ SPF_RMSE_DM_Test <- function(spf_data, ar_benchmark_data,
     tibble(
       horizon = h,
       spf_rmse       = sqrt(spf_mse),
-      hist_mean_rmse = sqrt(hist_mean_mse),
-      RW_rmse        = sqrt(RW_mean_mse),
       DAR_rmse       = sqrt(DAR_mse),
       IAR_rmse       = sqrt(IAR_mse),
-      NoChange_rmse  = sqrt(NoChange_mse)
+      RW_rmse        = sqrt(RW_mean_mse),
+      NoChange_rmse  = sqrt(NoChange_mse),
+      hist_mean_rmse = sqrt(hist_mean_mse)
     )
 
   })
@@ -710,11 +738,11 @@ SPF_RMSE_DM_Test <- function(spf_data, ar_benchmark_data,
 
     tibble(
       horizon = h,
-      spf_hist_mean = dm_test_hist_mean,
-      SPF_RW_mean = dm_test_rwmean,
       spf_DAR = dm_test_dar,
       spf_IAR = dm_test_iar,
-      spf_NoChange = dm_test_nochange
+      SPF_RW_mean = dm_test_rwmean,
+      spf_NoChange = dm_test_nochange,
+      spf_hist_mean = dm_test_hist_mean
     )
 
   })
@@ -722,7 +750,36 @@ SPF_RMSE_DM_Test <- function(spf_data, ar_benchmark_data,
   RMSE <- bind_rows(sq_error_loss)
   DM_Test <- bind_rows(DM_Test)
 
-  output <- list(RMSE = RMSE, DM_Test = DM_Test)
+
+  # Function to convert DM statistic into star code
+  dm_to_stars <- function(x) {
+    sx <- sign(x)
+    ax <- abs(x)
+
+    d <- case_when(
+      # One-sided 10% significance: DM > 1.282
+      x > 1.282 & x < 1.645 ~ 9,
+
+      # Two-sided thresholds
+      ax < 1.645 ~ 0,
+      ax < 1.96  ~ 1,
+      ax < 2.576 ~ 2,
+      TRUE       ~ 3
+    )
+
+    return(sx * d)
+  }
+
+  # Apply to all DM columns except 'horizon'
+  DM_stars <- DM_Test %>%
+    mutate(across(
+      .cols = -horizon,
+      .fns  = dm_to_stars,
+      .names = "{.col}"
+    ))
+
+
+  output <- list(RMSE = RMSE, DM_Test = DM_Test, DM_stars = DM_stars)
   return(output)
 }
 

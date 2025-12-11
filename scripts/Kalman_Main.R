@@ -118,7 +118,7 @@ RMSE_yearly <- SPF_RMSE_DM_Test_yearly(spf_annual, AR_bench_yearly,
                                        EvalPeriod = evalPeriod)
 
 # Evaluation data (CY versus NY) and benchmark models
-RMSE_quarterly <- SPF_RMSE_DM_Test(spf_data_cy, AR_bench_quarterly,
+RMSE_quarterly <- SPF_RMSE_DM_Test(spf_data_ny, AR_bench_quarterly,
                               DropPeriod = dropYears,
                               EvalPeriod = evalPeriod)
 
@@ -127,7 +127,7 @@ RMSE_quarterly <- SPF_RMSE_DM_Test(spf_data_cy, AR_bench_quarterly,
 RMSE_yearly$RMSE_yearly
 
 # DM test statistics
-RMSE_yearly$DM_Test_yearly
+RMSE_yearly$DM_stars_yearly
 
 
 # Root Mean Squared Errors
@@ -135,6 +135,7 @@ RMSE_quarterly$RMSE
 
 # DM test statistics
 RMSE_quarterly$DM_Test
+RMSE_quarterly$DM_stars
 
 
 test :)
