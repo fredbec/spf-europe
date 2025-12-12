@@ -101,7 +101,7 @@ AR_benchmark_yearly = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, e
     # Read out vintage
     vintage_data <- rgdp %>% filter(origin_year == this_year, origin_month == this_month)
 
-    # Latest available quartery GDP
+    # Latest available quarterly GDP
     q_last <- vintage_data$target_quarter[dim(vintage_data)[1]]
 
     # Compute annual real-time GDP growth rates
