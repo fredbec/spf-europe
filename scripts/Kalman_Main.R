@@ -19,18 +19,18 @@ cat("\014")
 # Load auxiliary functions
 source(here("scripts", "Kalman_Main_aux_functions.R"))
 
-evalMonth <- 2
+SPFevalMonth <- 1
+
 
 #### Quick plots
 
 # EU-SPF filter without additional variables
-SPF <- data_function_spf(NA,endMonth = evalMonth)
+SPF <- data_function_spf(NA,endMonth = SPFevalMonth)
 rgdp_all           <- SPF$rgdp_all
 spf_forecasts_cy   <- SPF$spf_forecasts_cy
 spf_forecasts_ny   <- SPF$spf_forecasts_ny
 evaluation_data_cy <- SPF$evaluation_data_cy
 evaluation_data_ny <- SPF$evaluation_data_ny
-
 
 # Merge CY and NY forecasts into one table with gdp_growth
 plot_data <- evaluation_data_cy %>%
@@ -64,7 +64,7 @@ ggplot(plot_data_long, aes(x = ref_period, y = value, color = series)) +
 
 
 ##### Forecast evaluation
-rm(list=setdiff(ls(), "evalMonth"))
+rm(list=setdiff(ls(), "SPFevalMonth"))
 cat("\014")
 
 # Load auxiliary functions
@@ -73,7 +73,8 @@ source(here("scripts", "Kalman_Main_aux_functions.R"))
 ### Read in filtered quarterly SPF projections
 FilterType <- NA   # 'US_SPF', 'IndProd', NA
 est_gamma  <- FALSE
-SPF <- data_function_spf(FilterType, est_gamma, endMonth = evalMonth)
+SPF <- data_function_spf(FilterType, est_gamma, endMonth = SPFevalMonth)
+spf_annual  <- SPF$spf_annual
 rgdp_all    <- SPF$rgdp_all
 spf_data_cy <- SPF$evaluation_data_cy
 spf_data_ny <- SPF$evaluation_data_ny
@@ -81,13 +82,24 @@ spf_data_ny <- SPF$evaluation_data_ny
 # spf_forecasts_ny   <- SPF$spf_forecasts_ny
 
 
-# AR Benchmark models
-source(here("scripts", "AR_benchmark.R"))
-AR_bench <- AR_benchmark(rgdp_all, ar_length = 30,
-                         rw_length = 8,
-                         max_lag = 4,
-                         SampleEnd = 2026,
-                         endMonth = evalMonth)
+
+### AR Benchmark models
+source(here("scripts", "AR_benchmark_quarterly.R"))
+source(here("scripts", "AR_benchmark_yearly.R"))
+
+# Quarterly GDP growth forecasts
+AR_bench_quarterly <- AR_benchmark_quarterly(rgdp_all, ar_length = 30,
+                                             rw_length = 8,
+                                             max_lag = 4,
+                                             SampleEnd = 2026,
+                                             endMonth = 2)
+
+# Yearly GDP growth forecasts
+AR_bench_yearly <- AR_benchmark_yearly(rgdp_all, ar_length = 30,
+                                       rw_length = 4,
+                                       max_lag = 1,
+                                       SampleEnd = 2026,
+                                       endMonth = 2)
 
 
 ### Bias of SPF forecasts
@@ -101,17 +113,29 @@ SPF_bias(spf_data_cy,DropPeriod = dropYears, EvalPeriod = evalPeriod)
 SPF_bias(spf_data_ny,DropPeriod = dropYears, EvalPeriod = evalPeriod)
 
 
+### Yearly forecast evaluation
+RMSE_yearly <- SPF_RMSE_DM_Test_yearly(spf_annual, AR_bench_yearly,
+                                       EvalPeriod = evalPeriod)
 
 # Evaluation data (CY versus NY) and benchmark models
-RMSE_test <- SPF_RMSE_DM_Test(spf_data_cy, AR_bench,
+RMSE_quarterly <- SPF_RMSE_DM_Test(spf_data_ny, AR_bench_quarterly,
                               DropPeriod = dropYears,
                               EvalPeriod = evalPeriod)
 
-# Root Mean Squared Errors
-RMSE_test$RMSE
+
+# Root Mean Squared Errors for yearly forecasts
+RMSE_yearly$RMSE_yearly
 
 # DM test statistics
-RMSE_test$DM_Test
+RMSE_yearly$DM_stars_yearly
+
+
+# Root Mean Squared Errors
+RMSE_quarterly$RMSE
+
+# DM test statistics
+RMSE_quarterly$DM_Test
+RMSE_quarterly$DM_stars
 
 
 test :)

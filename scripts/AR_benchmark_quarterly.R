@@ -1,6 +1,6 @@
-#' AR Benchmark Forecasts for Real-Time GDP
+#' AR Benchmark Forecasts for Quarterly Real-Time GDP
 #'
-#' Computes real-time forecasts of GDP using:
+#' Computes real-time forecasts of quarterly GDP using:
 #'   - Direct AR (DAR) models with horizon-specific lag selection,
 #'   - Indirect AR (IAR) models (iterated AR forecasts),
 #'   - Rolling-window mean (RWmean) benchmarks.
@@ -23,6 +23,7 @@
 #'   \item{DAR_fc}{Tibble of direct AR forecasts for h = 0,...,4}
 #'   \item{IAR_fc}{Tibble of iterated AR forecasts for h = 0,...,4}
 #'   \item{RWmean_fc}{Tibble of rolling-window mean forecasts for h = 0,...,4}
+#'   \item{NoChange_fc}{Tibble of NoChange forecasts for h = 0,...,4}
 #'
 #' @examples
 #' \dontrun{
@@ -37,10 +38,11 @@
 #' head(forecasts$DAR_fc)
 #' head(forecasts$IAR_fc)
 #' head(forecasts$RWmean_fc)
+#' head(forecasts$NoChange_fc)
 #' }
 #' #'
 #' @export
-AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, endMonth = 2) {
+AR_benchmark_quarterly = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, endMonth = 2) {
 
   # Specify evaluation sample
   ref_qtrs <- seq(as.yearqtr("2001 Q1", format = "%Y Q%q"), # Has to be correctly chosen!
@@ -107,10 +109,6 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, endMonth
     # Read out vintage
     vintage_data <- rgdp %>% filter(origin_year == this_year, origin_month == this_month)
     vintage_data <- vintage_data[-1, ]
-
-    # Merge SPF to vintages
-    vintage_data <- vintage_data %>%
-      mutate(merge_date = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q") )
 
     # Lag order
     T <- dim(vintage_data)[1]
@@ -209,9 +207,9 @@ AR_benchmark = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, endMonth
 
   # Define output of this function
   Output <- list(
-    DAR_fc     = fc_DAR,
-    IAR_fc     = fc_IAR,
-    RWmean_fc = fc_RWmean,
+    DAR_fc      = fc_DAR,
+    IAR_fc      = fc_IAR,
+    RWmean_fc   = fc_RWmean,
     NoChange_fc = fc_NoChange
   )
   return(Output)
