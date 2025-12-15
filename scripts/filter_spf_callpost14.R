@@ -93,7 +93,7 @@ combs <- CJ(year = years,
 
 
 #without US SPF
-for(shft in -1:1){
+for(apprerr in c(0.001, 0.005, 0.01, 0.05, 0.1)){
   res_spf_filter <- vector(mode = "list", length = nrow(combs))
   res_spf_additionalinfo <- vector(mode = "list", length = nrow(combs))
   for(i in 1:nrow(combs)){
@@ -108,7 +108,7 @@ for(shft in -1:1){
                       SPF_data = spfdat,
                       real_time_data = rtd,
                       rtd_issue = "latest_vintage",
-                      rtd_shift = shft)
+                      approx_err = apprerr)
 
     res_spf_filter[[i]] <- res$spf_filter_dat
     res_spf_additionalinfo[[i]] <- data.table(origin_quarter = cqu,
@@ -121,8 +121,8 @@ for(shft in -1:1){
   res_spf_filter <- rbindlist(res_spf_filter)
   res_spf_additionalinfo <- rbindlist(res_spf_additionalinfo)
 
-  data.table::fwrite(res_spf_filter, here("data", paste0("filter_spf_data_medianfc", "_month", shft+2, ".csv")))
-  data.table::fwrite(res_spf_additionalinfo, here("data", paste0("filter_spf_data_medianfc_supplementary", "_month", shft+2, ".csv")))
+  data.table::fwrite(res_spf_filter, here("data", paste0("filter_spf_data_medianfc", "approx_err", 1000*apprerr, ".csv")))
+  data.table::fwrite(res_spf_additionalinfo, here("data", paste0("filter_spf_data_medianfc_supplementary", "approx_err", 1000*apprerr,".csv")))
 }
 
 

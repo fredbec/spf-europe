@@ -72,7 +72,8 @@ filter_dat <- function(current_quarter,
                        release_US_SPF = "latest",
                        est_gamma = FALSE,
                        rtd_issue = c("latest_vintage", "rtd"),
-                       rtd_shift = -1){
+                       rtd_shift = -1,
+                       approx_err = 0.01){
 
   if(length(rtd_issue) > 1){
     stop("Choose one of the available options")
@@ -176,9 +177,9 @@ filter_dat <- function(current_quarter,
   }
 
   if(is.null(SPF_data_US)){
-    cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc)
+    cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, approx_err = approx_err)
     spf_filter_vals_cy <- cyres$SPF_filtered
-    cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc)
+    cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, approx_err = approx_err)
     spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
   } else {
     #following code is a bit adhoc, since there was an error in the instance 2018Q1

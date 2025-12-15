@@ -308,7 +308,7 @@ log_likelihood_function <- function(rw_sd, y, approx_err) {
 #' SPF <- SPF_filter(rgdp = y[,2], spf = y[,1])
 #'
 #' @export
-SPF_filter <- function(rgdp,spf) {
+SPF_filter <- function(rgdp,spf, approx_err = 0.01) {
 
   # Prepare input for Kalman filter and smoother
   y <- cbind(spf,rgdp)
@@ -330,7 +330,7 @@ SPF_filter <- function(rgdp,spf) {
                   upper = Inf)
 
   # Given the estimate 'est_sd', filter and smooth states, i.e., implied SPF
-  filtered_states <- kalman_filter(y, rw_sd = est_sd$par, approx_err = obs_approx_error, smooth = TRUE)
+  filtered_states <- kalman_filter(y, rw_sd = est_sd$par, approx_err = approx_err, smooth = TRUE)
   SPF <- as.matrix(kalman_smoother(filtered_states)[,1])
 
   # Define output of this function
