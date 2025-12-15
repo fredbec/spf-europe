@@ -320,16 +320,17 @@ SPF_filter <- function(rgdp,spf) {
 
   # Estimate the random walk error standard deviation
   start <- 0.5
+  obs_approx_error <- 0.01 # possible future input to Kalman function
   est_sd <- optim(par = start,
                   fn = log_likelihood_function,
                   y = y,
-                  approx_err = 0.01,
+                  approx_err = obs_approx_error,
                   method = "L-BFGS-B",
                   lower = 0.0001,
                   upper = Inf)
 
   # Given the estimate 'est_sd', filter and smooth states, i.e., implied SPF
-  filtered_states <- kalman_filter(y, rw_sd = est_sd$par, approx_err = 0.01, smooth = TRUE)
+  filtered_states <- kalman_filter(y, rw_sd = est_sd$par, approx_err = obs_approx_error, smooth = TRUE)
   SPF <- as.matrix(kalman_smoother(filtered_states)[,1])
 
   # Define output of this function
