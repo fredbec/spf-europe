@@ -4,7 +4,7 @@
   ### Read in filtered quarterly SPF forecasts
   if (is.na(FilterOpt)) {
     # SPF without US
-    spf_data <- read.csv(sprintf("data/filter_spf_data_medianfc_month%d.csv", Month))
+    spf_data <- read.csv("data/filter_spf_data_medianfc_approx_err_calibrated.csv") # read.csv(sprintf("data/filter_spf_data_medianfc_month%d.csv", Month))
 
     # SPF filter augmented by US-SPF
   } else if (FilterOpt == 'US_SPF') {

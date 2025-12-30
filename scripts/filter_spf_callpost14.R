@@ -15,7 +15,7 @@ rtd <- fread(here("data", "revdatpost14.csv")) |>
   setorder(origin_year, origin_month, origin_day, target_year, target_quarter) |>
   DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
      by = .(origin_year, origin_month, origin_day)) |>
-  DT(, rgdp := NULL) |>
+  #DT(, rgdp := NULL) |>
   DT(!is.na(rgdp_growth)) |>
   DT(, c("number", "origin_day") := NULL)|>
   DT(, flag := "post")
@@ -24,7 +24,7 @@ rtd_pre14 <- fread(here("data", "revdatpre14.csv")) |>
   setorder(origin_year, origin_month, target_year, target_quarter) |>
   DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
      by = .(origin_year, origin_month)) |>
-  DT(, rgdp := NULL) |>
+  #DT(, rgdp := NULL) |>
   DT(!is.na(rgdp_growth)) |>
   DT(, flag := "pre")
 
@@ -52,10 +52,25 @@ rtd_full <- merge(rtd_full, rtd, by = c("origin_year", "origin_month",
 rtd_full[, rgdp_growth := zoo::na.locf(rgdp_growth, na.rm = FALSE),
         by = .(target_year, target_quarter)]
 
+rtd_full[, rgdp := zoo::na.locf(rgdp, na.rm = FALSE),
+         by = .(target_year, target_quarter)]
+
 rtd <- rtd_full |>
   DT(target_year <= origin_year) |>
   DT(, rgdp_growth := ifelse(is.na(rgdp_growth), NaN, rgdp_growth)) |>
   setorder(origin_year, origin_month, target_year, target_quarter)
+
+
+rtd <- rtd |>
+  DT(, rgdp_growth_ann := ifelse(
+    target_quarter == 4,
+    ((rgdp + shift(rgdp,1) + shift(rgdp,2) + shift(rgdp,3)) /
+       (shift(rgdp,4) + shift(rgdp,5) + shift(rgdp,6) + shift(rgdp,7)) - 1) * 100,
+    NA_real_
+  ),
+  by = .(origin_year, origin_month)) |>
+  DT(, rgdp := NULL)
+
 
 #adhoc calculation of SPF ensemble forecasts
 #!!!!!!!!!!!!! might be wrong !!!!!!!!!!!!!!
@@ -121,7 +136,7 @@ for(apprerr in c(0.001, 0.005, 0.01, 0.05, 0.1)){
   res_spf_filter <- rbindlist(res_spf_filter)
   res_spf_additionalinfo <- rbindlist(res_spf_additionalinfo)
 
-  data.table::fwrite(res_spf_filter, here("data", paste0("filter_spf_data_medianfc", "approx_err", 1000*apprerr, ".csv")))
+  data.table::fwrite(res_spf_filter, here("data", paste0("filter_spf_data_medianfc_", "approx_err", 1000*apprerr, ".csv")))
   data.table::fwrite(res_spf_additionalinfo, here("data", paste0("filter_spf_data_medianfc_supplementary", "approx_err", 1000*apprerr,".csv")))
 }
 

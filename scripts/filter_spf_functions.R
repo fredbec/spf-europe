@@ -29,6 +29,8 @@ get_rtd <- function(real_time_data,
 
     #exclude instances from na_obs that are not NA (as they are in truth_dat)
     na_obs <- na_obs[!truth_dat, on = .(target_year, target_quarter)]
+    na_obs <- cbind(na_obs,NA_real_)
+    colnames(na_obs)[4] <- "rgdp_growth_ann"
 
     #append NAs to truth_dat
     truth_dat <- rbind(truth_dat,
@@ -177,6 +179,36 @@ filter_dat <- function(current_quarter,
   }
 
   if(is.null(SPF_data_US)){
+
+    # Calibration of approximation error to observed data (Code should be improved)
+    if (is.nan(approx_err)) {
+      test = cbind(data_filter_cy$rgdp_growth,data_filter_cy$rgdp_growth_ann)
+
+      if (all(is.na(test[,2]))) {
+        approx_err = 0.1
+        print("Warning: No annual growth rates!")
+      } else {
+        last_valid <- max(max(which(!is.na(test[,2]))), dim(test)[1])
+        test <- test[1:last_valid, ]
+
+        n <- nrow(test)
+        rem <- n %% 4
+
+        if (rem != 0) {
+          test <- test[(rem + 1):n, ]
+        }
+
+        test = cbind(test,NaN)
+        for (i in 8:dim(test)[1]) {
+          test[i,3] = 1/16 * (test[i,1] + 2*test[i-1,1] + 3*test[i-2,1] + 4*test[i-3,1] +
+                                + 3*test[i-4,1] +  + 2*test[i-5,1] + 2*test[i-6,1])
+
+        }
+        ApprErr <- test[,2] - test[,3]
+        approx_err <- sd(ApprErr, na.rm = TRUE)
+      }
+    }
+
     cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, approx_err = approx_err)
     spf_filter_vals_cy <- cyres$SPF_filtered
     cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, approx_err = approx_err)
