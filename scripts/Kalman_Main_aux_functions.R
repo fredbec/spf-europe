@@ -83,7 +83,7 @@
       spf_filter_cy = coalesce(spf_filter_cy, spf_filter_ny)
     )
 
-  #reshape forecasts like US SPF format
+  # Reshape forecasts like US SPF format
   spf_forecasts_cy <- spf_data %>%
     select(target_year, target_quarter, h, spf_filter_cy) %>%
     pivot_wider(
