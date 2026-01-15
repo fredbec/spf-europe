@@ -233,323 +233,15 @@ test :)
 
 
 
-#### Here comes old evaluation code:
 
-### Fit AR(1) in spirit of direct forecasting
 
-ref_qtrs <- seq(as.yearqtr("2004 Q1", format = "%Y Q%q"), # Has to be correctly chosen!
-                as.yearqtr("2024 Q4", format = "%Y Q%q"), # Has to be correctly chosen!
-                by = 0.25)
 
-# Convert to data frame with formatted ref_period
-fc_AR1 <- tibble(
-  ref_period = format(ref_qtrs, "%Y Q%q"),
-  AR1_0 = NA_real_,
-  AR1_1 = NA_real_,
-  AR1_2 = NA_real_,
-  AR1_3 = NA_real_,
-  AR1_4 = NA_real_
-)
 
-fc_RWmean <- tibble(
-  ref_period = format(ref_qtrs, "%Y Q%q"),
-  AR1_0 = NA_real_,
-  AR1_1 = NA_real_,
-  AR1_2 = NA_real_,
-  AR1_3 = NA_real_,
-  AR1_4 = NA_real_
-)
 
 
-# Filter the relevant vintages
-vintages <- rgdp_all %>%
-  filter(origin_year >= 2001 & origin_year <= 2024, # Has to be correctly chosen!
-         origin_month %in% c(2, 5, 8, 11)) %>%
-  distinct(origin_year, origin_month) %>%
-  arrange(origin_year, origin_month)
 
 
-# Loop over each vintage
-for (i in seq_len(nrow(vintages) - 4)) {
-  this_year <- vintages$origin_year[i]
-  this_month <- vintages$origin_month[i]
-  this_quarter <- floor(this_month / 3) + 1
 
-  # Read out vintage
-  vintage_data <- rgdp_all %>% filter(origin_year == this_year, origin_month == this_month)
-  vintage_data <- vintage_data[-1, ]
-
-  # Merge SPF to vintages
-  vintage_data <- vintage_data %>%
-    mutate(merge_date = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q") )
-
-  spf_cy <- spf_forecasts_cy %>%
-    mutate(merge_date = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q") )
-  spf_cy$spf_h1 <- lead(spf_cy$spf_h1)
-  spf_cy$spf_h2 <- lead(spf_cy$spf_h2,2)
-  spf_cy$spf_h3 <- lead(spf_cy$spf_h3,3)
-  spf_cy$spf_h4 <- lead(spf_cy$spf_h4,4)
-
-  spf_ny <- spf_forecasts_ny %>%
-    mutate(merge_date = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q") )
-  spf_ny$spf_h1 <- lead(spf_ny$spf_h1)
-  spf_ny$spf_h2 <- lead(spf_ny$spf_h2,2)
-  spf_ny$spf_h3 <- lead(spf_ny$spf_h3,3)
-  spf_ny$spf_h4 <- lead(spf_ny$spf_h4,4)
-
-  vintage_data <- vintage_data %>%
-    left_join(spf_cy, by = "merge_date")
-
-  vintage_data <- vintage_data %>%
-    left_join(spf_ny, by = "merge_date")
-
-  # First observation of SPF
-  drop_ind <- which(!is.na(vintage_data$spf_h0.x))[1] - 5
-  vintage_data <- vintage_data[-(1:drop_ind), ]
-
-  # Lag order
-  T <- dim(vintage_data)[1]
-  lag_quarters <- (this_year - vintage_data$target_year.x[T]) * 4 + (this_quarter - vintage_data$target_quarter.x[T])
-
-  gdp_latest <- vintage_data$gdp_growth[T]
-
-  # Direct forecasts AR(1)
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters), data = vintage_data)
-  forecasts_AR1$AR1_0[i] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 1), data = vintage_data)
-  forecasts_AR1$AR1_1[i+1] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 2), data = vintage_data)
-  forecasts_AR1$AR1_2[i+2] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 3), data = vintage_data)
-  forecasts_AR1$AR1_3[i+3] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 4), data = vintage_data)
-  forecasts_AR1$AR1_4[i+4] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest)
-
-
-  # Direct forecasts SPF (cy)
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters) + spf_h0.x, data = vintage_data)
-  forecasts_SPF_cy$SPF_cy_0[i] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest, vintage_data$spf_h0.x[T])
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 1) + lag(spf_h1.x,1), data = vintage_data)
-  forecasts_SPF_cy$SPF_cy_1[i+1] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest, vintage_data$spf_h1.x[T])
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 2) + lag(spf_h2.x,2), data = vintage_data)
-  forecasts_SPF_cy$SPF_cy_2[i+2] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest, vintage_data$spf_h2.x[T])
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 3) + lag(spf_h3.x,3), data = vintage_data)
-  forecasts_SPF_cy$SPF_cy_3[i+3] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest, vintage_data$spf_h3.x[T])
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 4) + lag(spf_h4.x,4), data = vintage_data)
-  forecasts_SPF_cy$SPF_cy_4[i+4] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest, vintage_data$spf_h4.x[T])
-
-
-  # Direct forecasts SPF (ny)
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters) + spf_h0.y, data = vintage_data)
-  forecasts_SPF_ny$SPF_ny_0[i] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest, vintage_data$spf_h0.y[T])
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 1) + lag(spf_h1.y,1), data = vintage_data)
-  forecasts_SPF_ny$SPF_ny_1[i+1] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest, vintage_data$spf_h1.y[T])
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 2) + lag(spf_h2.y,2), data = vintage_data)
-  forecasts_SPF_ny$SPF_ny_2[i+2] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest, vintage_data$spf_h2.y[T])
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 3) + lag(spf_h3.y,3), data = vintage_data)
-  forecasts_SPF_ny$SPF_ny_3[i+3] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest, vintage_data$spf_h3.y[T])
-
-  ar_coeff <- lm(gdp_growth ~ lag(gdp_growth, lag_quarters + 4) + lag(spf_h4.y,4), data = vintage_data)
-  forecasts_SPF_ny$SPF_ny_4[i+4] <- coefficients(ar_coeff) %*% rbind(1, gdp_latest, vintage_data$spf_h4.y[T])
-
-}
-
-
-
-# Merge AR1 forecasts
-forecasts_AR1 <- forecasts_AR1 %>%
-  mutate(ref_period = as.yearqtr(ref_period, format = "%Y Q%q"))
-
-forecasts_SPF_cy <- forecasts_SPF_cy %>%
-  mutate(ref_period = as.yearqtr(ref_period, format = "%Y Q%q"))
-
-forecasts_SPF_ny <- forecasts_SPF_ny %>%
-  mutate(ref_period = as.yearqtr(ref_period, format = "%Y Q%q"))
-
-
-rgdp <- rgdp %>%
-  left_join(forecasts_AR1, by = "ref_period")
-
-rgdp <- rgdp %>%
-  left_join(forecasts_SPF_cy, by = "ref_period")
-
-rgdp <- rgdp %>%
-  left_join(forecasts_SPF_ny, by = "ref_period")
-
-
-# Merge filtered SPF
-spf_forecasts_cy <- spf_forecasts_cy %>%
-  mutate(ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q")) %>%
-  select(-target_year, -target_quarter)
-
-spf_forecasts_ny <- spf_forecasts_ny %>%
-  mutate(ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q")) %>%
-  select(-target_year, -target_quarter)
-
-rgdp <- rgdp %>%
-  left_join(
-    spf_forecasts_cy %>%
-      rename_with(~ paste0("filter_cy_", .), starts_with("spf_h")),
-    by = "ref_period"
-  )
-
-rgdp <- rgdp %>%
-  left_join(
-    spf_forecasts_ny %>%
-      rename_with(~ paste0("filter_ny_", .), starts_with("spf_h")),
-    by = "ref_period"
-  )
-
-
-
-
-
-### Forecast evaluation
-evaluation_data <- rgdp %>%
-  filter(!(is.na(filter_cy_spf_h0) | is.na(filter_cy_spf_h4)))
-
-evaluation_data <- evaluation_data %>%
-  mutate(fc_error_cy_0 = gdp_growth - filter_cy_spf_h0,
-         fc_error_cy_1 = gdp_growth - filter_cy_spf_h1,
-         fc_error_cy_2 = gdp_growth - filter_cy_spf_h2,
-         fc_error_cy_3 = gdp_growth - filter_cy_spf_h3,
-         fc_error_cy_4 = gdp_growth - filter_cy_spf_h4,
-         fc_error_ny_0 = gdp_growth - filter_ny_spf_h0,
-         fc_error_ny_1 = gdp_growth - filter_ny_spf_h1,
-         fc_error_ny_2 = gdp_growth - filter_ny_spf_h2,
-         fc_error_ny_3 = gdp_growth - filter_ny_spf_h3,
-         fc_error_ny_4 = gdp_growth - filter_ny_spf_h4)
-
-
-# Exclude 2009 and 2010?
-evaluation_data <- evaluation_data %>%
-  filter(!(target_year %in% c(2009, 2010)))
-
-evaluation_data <- evaluation_data %>%
-    filter(target_year < 2019 & target_year > 2004)
-
-# Unbiased (CY)
-results <- lapply(0:4, function(h) {
-  # Get formula as string and evaluate
-  formula <- as.formula(paste0("fc_error_cy_", h, " ~ 1"))
-
-  # Fit regression
-  model <- lm(formula, data = evaluation_data)
-
-  # Newey-West SE (you can choose lag = h or any rule-of-thumb)
-  nw <- coeftest(model, vcov = NeweyWest(model, lag = h, prewhite = FALSE))
-
-  # Return horizon, estimate, SE, and p-value
-  tibble(
-    horizon = h,
-    intercept = nw[1, 1],
-    std_error = nw[1, 2],
-    p_value = nw[1, 4]
-  )
-})
-
-# Combine all into one table
-results_table <- bind_rows(results)
-print(results_table)
-
-
-# Unbiased (NY)
-results <- lapply(0:4, function(h) {
-  # Get formula as string and evaluate
-  formula <- as.formula(paste0("fc_error_ny_", h, " ~ 1"))
-
-  # Fit regression
-  model <- lm(formula, data = evaluation_data)
-
-  # Newey-West SE (you can choose lag = h or any rule-of-thumb)
-  nw <- coeftest(model, vcov = NeweyWest(model, lag = h, prewhite = FALSE))
-
-  # Return horizon, estimate, SE, and p-value
-  tibble(
-    horizon = h,
-    intercept = nw[1, 1],
-    std_error = nw[1, 2],
-    p_value = nw[1, 4]
-  )
-})
-
-# Combine all into one table
-results_table <- bind_rows(results)
-print(results_table)
-
-
-
-# MSE
-
-# Compute historical mean of GDP growth (the naive forecast)
-gdp_mean <- mean(evaluation_data$gdp_growth, na.rm = TRUE)
-
-# Loop over h = 0 to 4
-error_stats <- lapply(0:4, function(h) {
-  actual <- evaluation_data$gdp_growth
-  spf_forecast_error_cy <- evaluation_data[[paste0("fc_error_cy_", h)]]
-  spf_forecast_error_ny <- evaluation_data[[paste0("fc_error_ny_", h)]]
-
-  # Compute SPF errors
-  spf_cy_mse <- mean((spf_forecast_error_cy)^2, na.rm = TRUE)
-  spf_cy_mae <- mean(abs(spf_forecast_error_cy), na.rm = TRUE)
-
-  spf_ny_mse <- mean((spf_forecast_error_ny)^2, na.rm = TRUE)
-  spf_ny_mae <- mean(abs(spf_forecast_error_ny), na.rm = TRUE)
-
-  # Compute benchmark errors: actual - historical mean
-  benchmark_error <- actual - gdp_mean
-  hist_mean_mse <- mean((benchmark_error)^2, na.rm = TRUE)
-  hist_mean_mae <- mean(abs(benchmark_error), na.rm = TRUE)
-
-  # Compute benchmark errors of AR1:
-  forecast_ar1 <- evaluation_data[[paste0("AR1_", h)]]
-  benchmark_ar1_error <- actual - forecast_ar1
-  ar1_mse <- mean((benchmark_ar1_error)^2, na.rm = TRUE)
-  ar1_mae <- mean(abs(benchmark_ar1_error), na.rm = TRUE)
-
-  # Compute errors of AR1-SPF_cy:
-  forecast_ar1 <- evaluation_data[[paste0("SPF_cy_", h)]]
-  benchmark_ar1_error <- actual - forecast_ar1
-  ar_spf_cy_mse <- mean((benchmark_ar1_error)^2, na.rm = TRUE)
-  ar_spf_cy_mae <- mean(abs(benchmark_ar1_error), na.rm = TRUE)
-
-  # Compute errors of AR1-SPF_ny:
-  forecast_ar1 <- evaluation_data[[paste0("SPF_ny_", h)]]
-  benchmark_ar1_error <- actual - forecast_ar1
-  ar_spf_ny_mse <- mean((benchmark_ar1_error)^2, na.rm = TRUE)
-  ar_spf_ny_mae <- mean(abs(benchmark_ar1_error), na.rm = TRUE)
-
-  tibble(
-    horizon = h,
-    spf_cy_mse = spf_cy_mse,
-    #spf_cy_mae = spf_cy_mae,
-    spf_ny_mse = spf_ny_mse,
-    #spf_ny_mae = spf_ny_mae,
-    hist_mean_mse = hist_mean_mse,
-    #hist_mean_mae = hist_mean_mae,
-    ar1_mse = ar1_mse,
-    #ar1_mae = ar1_mae,
-    ar_spf_cy_mse = ar_spf_cy_mse,
-    #ar_spf_cy_mae = ar_spf_cy_mae,
-    ar_spf_ny_mse = ar_spf_ny_mse,
-    #ar_spf_ny_mae = ar_spf_ny_mae
-  )
-})
-
-comparison_table <- bind_rows(error_stats)
-print(comparison_table)
 
 
 
@@ -615,7 +307,7 @@ SPF_filtered_us_gamma <- SPF_filter_us_gamma(rgdp,spf,us_spf)
 
 #### Trash - Code
 
-source(here("scripts", "kalman_filter.R"))
+source(here("scripts", "kalman_filter_fe_fh.R"))
 
 q <- rbind(-1.975905496,-0.5638928,2.660615959,2.566018083,2.244165169,2.060216621,
            4.861686218,3.396030031,1.409498959,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,
@@ -625,9 +317,17 @@ a <- rbind(NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,NaN,2.338002864,NaN,NaN,NaN,1
            NaN,1.885626914,NaN,NaN,NaN,1.833479425)
 
 # Test the SPF-filter function
-test <- SPF_filter(q,a)
+q <- q[1:16]
+a <- a[1:16]
+spfFixHor = 4
+QuarterID = 1
+test <- SPF_filter_fe_fh(q,a,spfFixHor,QuarterID)
+test
 
 y <- cbind(a,q)
+y <- y[1:16,]
+
+
 
 # start will be estimated using built-in optimizer
 matlab_est <- 1.33424292247901 # was estimated using Matlab
