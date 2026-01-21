@@ -17,7 +17,6 @@ for(shft in -1:1){
     cqu <- cissue$quarter
     cyr <- cissue$year
 
-    print(cissue)
     res <- filter_dat(current_quarter = cqu,
                       current_year = cyr,
                       SPF_data = spfdat,

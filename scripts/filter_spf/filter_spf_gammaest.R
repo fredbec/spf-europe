@@ -16,7 +16,6 @@ for(shft in -1:1){
   for(i in 1:nrow(combs)){
 
     cissue <- combs[i,]
-    print(cissue)
 
     cqu <- cissue$quarter
     cyr <- cissue$year
