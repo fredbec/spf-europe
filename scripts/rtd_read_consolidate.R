@@ -77,3 +77,73 @@ revdatpost14 <- fread(here("data", "estat_ei_na_q_vtg_filtered_en.csv")) |>
 
 
 data.table::fwrite(revdatpost14, here("data", "revdatpost14.csv"))
+
+
+### consolidate all into one dataset with growth rates
+
+rtd <- fread(here("data", "revdatpost14.csv")) |>
+  #filter out months with two vintage releases
+  DT(, number := .N,
+     by = c("origin_year", "origin_month", "target_year", "target_quarter")) |>
+  DT(number == 1) |>
+  setorder(origin_year, origin_month, origin_day, target_year, target_quarter) |>
+  DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
+     by = .(origin_year, origin_month, origin_day)) |>
+  #DT(, rgdp := NULL) |>
+  DT(!is.na(rgdp_growth)) |>
+  DT(, c("number", "origin_day") := NULL)|>
+  DT(, flag := "post")
+
+rtd_pre14 <- fread(here("data", "revdatpre14.csv")) |>
+  setorder(origin_year, origin_month, target_year, target_quarter) |>
+  DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
+     by = .(origin_year, origin_month)) |>
+  #DT(, rgdp := NULL) |>
+  DT(!is.na(rgdp_growth)) |>
+  DT(, flag := "pre")
+
+rtd <- rbind(rtd_pre14, rtd) |>
+  DT(, number := .N,
+     by = c("target_year", "target_quarter", "origin_year", "origin_month")) |>
+  DT(, flag2 := (number > 1 & flag == "pre")) |>
+  DT(flag2 == FALSE) |> # filter out duplicates
+  DT(, c("number", "flag2", "flag") := NULL)
+
+rtd_full <- CJ(origin_month = 1:12,
+               origin_year = unique(rtd$origin_year),
+               target_quarter = 1:4,
+               target_year = unique(rtd$target_year))
+
+rtd_full <- merge(rtd_full, rtd, by = c("origin_year", "origin_month",
+                                        "target_quarter", "target_year"), all.x = TRUE) |>
+  setorder(origin_year, origin_month) |>
+  #kick out first observation (as growth rate is NA)
+  DT(, fill := (target_quarter == 1 & target_year == 1991)) |>
+  DT(fill == FALSE) |>
+  DT(, fill := NULL)
+
+#fill in missing values by carrying forward the last vintage
+rtd_full[, rgdp_growth := zoo::na.locf(rgdp_growth, na.rm = FALSE),
+         by = .(target_year, target_quarter)]
+
+rtd_full[, rgdp := zoo::na.locf(rgdp, na.rm = FALSE),
+         by = .(target_year, target_quarter)]
+
+rtd <- rtd_full |>
+  DT(target_year <= origin_year) |>
+  DT(, rgdp_growth := ifelse(is.na(rgdp_growth), NaN, rgdp_growth)) |>
+  setorder(origin_year, origin_month, target_year, target_quarter)
+
+
+rtd <- rtd |>
+  DT(, rgdp_growth_ann := ifelse(
+    target_quarter == 4,
+    ((rgdp + shift(rgdp,1) + shift(rgdp,2) + shift(rgdp,3)) /
+       (shift(rgdp,4) + shift(rgdp,5) + shift(rgdp,6) + shift(rgdp,7)) - 1) * 100,
+    NA_real_
+  ),
+  by = .(origin_year, origin_month)) |>
+  DT(, rgdp := NULL)
+
+
+data.table::fwrite(rtd, here("data", "revdatfull.csv"))

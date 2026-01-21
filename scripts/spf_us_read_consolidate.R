@@ -17,4 +17,4 @@ spfus <- readxl::read_xlsx(here("data", "raw", "Median_RGDP_Growth.xlsx")) |>
   DT(, .SD, .SDcols = c("origin_year", "origin_quarter", "target_year", "target_quarter", "prediction"))
 
 
-data.table::fwrite(spfus, here("data", "spf_us_consolidated.csv"))
+data.table::fwrite(spfus, here("data", "spf_us_median_forecast.csv"))

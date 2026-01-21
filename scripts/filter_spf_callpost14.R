@@ -5,93 +5,11 @@ source(here("scripts", "filter_spf_functions.R"))
 #chain operator for data.table
 DT <- `[`
 
-#adhoc calculation of growth rates
-#!!!!!!!!!!!!! might be wrong !!!!!!!!!!!!!!
-rtd <- fread(here("data", "revdatpost14.csv")) |>
-  #filter out months with two vintage releases
-  DT(, number := .N,
-     by = c("origin_year", "origin_month", "target_year", "target_quarter")) |>
-  DT(number == 1) |>
-  setorder(origin_year, origin_month, origin_day, target_year, target_quarter) |>
-  DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
-     by = .(origin_year, origin_month, origin_day)) |>
-  #DT(, rgdp := NULL) |>
-  DT(!is.na(rgdp_growth)) |>
-  DT(, c("number", "origin_day") := NULL)|>
-  DT(, flag := "post")
-
-rtd_pre14 <- fread(here("data", "revdatpre14.csv")) |>
-  setorder(origin_year, origin_month, target_year, target_quarter) |>
-  DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
-     by = .(origin_year, origin_month)) |>
-  #DT(, rgdp := NULL) |>
-  DT(!is.na(rgdp_growth)) |>
-  DT(, flag := "pre")
-
-rtd <- rbind(rtd_pre14, rtd) |>
-  DT(, number := .N,
-     by = c("target_year", "target_quarter", "origin_year", "origin_month")) |>
-  DT(, flag2 := (number > 1 & flag == "pre")) |>
-  DT(flag2 == FALSE) |> # filter out duplicates
-  DT(, c("number", "flag2", "flag") := NULL)
-
-rtd_full <- CJ(origin_month = 1:12,
-               origin_year = unique(rtd$origin_year),
-               target_quarter = 1:4,
-               target_year = unique(rtd$target_year))
-
-rtd_full <- merge(rtd_full, rtd, by = c("origin_year", "origin_month",
-                                        "target_quarter", "target_year"), all.x = TRUE) |>
-  setorder(origin_year, origin_month) |>
-  #kick out first observation (as growth rate is NA)
-  DT(, fill := (target_quarter == 1 & target_year == 1991)) |>
-  DT(fill == FALSE) |>
-  DT(, fill := NULL)
-
-#fill in missing values by carrying forward the last vintage
-rtd_full[, rgdp_growth := zoo::na.locf(rgdp_growth, na.rm = FALSE),
-        by = .(target_year, target_quarter)]
-
-rtd_full[, rgdp := zoo::na.locf(rgdp, na.rm = FALSE),
-         by = .(target_year, target_quarter)]
-
-rtd <- rtd_full |>
-  DT(target_year <= origin_year) |>
-  DT(, rgdp_growth := ifelse(is.na(rgdp_growth), NaN, rgdp_growth)) |>
-  setorder(origin_year, origin_month, target_year, target_quarter)
-
-
-rtd <- rtd |>
-  DT(, rgdp_growth_ann := ifelse(
-    target_quarter == 4,
-    ((rgdp + shift(rgdp,1) + shift(rgdp,2) + shift(rgdp,3)) /
-       (shift(rgdp,4) + shift(rgdp,5) + shift(rgdp,6) + shift(rgdp,7)) - 1) * 100,
-    NA_real_
-  ),
-  by = .(origin_year, origin_month)) |>
-  DT(, rgdp := NULL)
-
-
-#adhoc calculation of SPF ensemble forecasts
-#!!!!!!!!!!!!! might be wrong !!!!!!!!!!!!!!
-#median or mean forecast?
-spfdat <- fread(here("data", "spf_consolidated.csv")) |>
-  DT(type_target == "annual" & type_format == "POINT") |>
-  DT(, horizon := target_year - forecast_year) |>
-  DT(horizon <=1) |>
-  DT(!is.na(prediction)) |>
-  DT(, ens_fc := median(prediction), by = c("target_year",
-                                          "forecast_year",
-                                          "forecast_quarter")) |>
-  DT(, .SD, .SDcols = c("target_year",
-                        "forecast_year",
-                        "forecast_quarter",
-                        "ens_fc")) |>
-  unique()
-
+spfdat <- fread(here("data", "spf_median_forecast.csv"))
 data.table::fwrite(spfdat, here("data", "spf_median_forecast.csv"))
 
-SPF_dataUS <- fread(here("data", "spf_us_consolidated.csv"))
+SPF_dataUS <- fread(here("data", "spf_us_median_forecast.csv"))
+
 IP_data <- fread(here("data", "ip_consolidated.csv")) |>
   DT(, origin_quarter := target_quarter + 1) |>
   DT(, origin_year := target_year) |>
@@ -105,7 +23,9 @@ years <- 2001:2024
 combs <- CJ(year = years,
             quarter = quarters)
 
-
+rtd <- fread(here("data", "revdatfull.csv")) |>
+  #DT(, .SD, .SDcols = c("origin_year", "origin_month", "target_quarter", "target_year", "rgdp_growth")) |>
+  DT(is.na(rgdp_growth), rgdp_growth := NaN)
 
 #without US SPF
 for(apprerr in c(0.001, 0.005, 0.01, 0.05, 0.1)){
@@ -194,7 +114,6 @@ for(shft in -1:1){
 
       cqu <- cissue$quarter
       cyr <- cissue$year
-      print(cissue)
       res <- filter_dat(current_quarter = cqu,
                         current_year = cyr,
                         SPF_data = spfdat,

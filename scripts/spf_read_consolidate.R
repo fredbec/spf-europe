@@ -95,3 +95,20 @@ alldata <- reldates[alldata, on = "reldate"] |>
                         "release_deadline", "release_publication", "prediction"))
 
 data.table::fwrite(alldata, here("data", "spf_consolidated.csv"))
+
+#compute median forecasts
+spfdat <- fread(here("data", "spf_consolidated.csv")) |>
+  DT(type_target == "annual" & type_format == "POINT") |>
+  DT(, horizon := target_year - forecast_year) |>
+  DT(horizon <=1) |>
+  DT(!is.na(prediction)) |>
+  DT(, ens_fc := median(prediction), by = c("target_year",
+                                            "forecast_year",
+                                            "forecast_quarter")) |>
+  DT(, .SD, .SDcols = c("target_year",
+                        "forecast_year",
+                        "forecast_quarter",
+                        "ens_fc")) |>
+  unique()
+
+data.table::fwrite(spfdat, here("data", "spf_median_forecast.csv"))
