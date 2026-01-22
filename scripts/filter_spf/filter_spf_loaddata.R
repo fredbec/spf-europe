@@ -4,7 +4,8 @@ library(data.table)
 DT <- `[`
 
 spfdat <- fread(here("data", "spf_median_forecast.csv"))
-data.table::fwrite(spfdat, here("data", "spf_median_forecast.csv"))
+spfdat_mean <- fread(here("data", "spf_mean_forecast.csv"))
+
 
 SPF_dataUS <- fread(here("data", "spf_us_median_forecast.csv"))
 
