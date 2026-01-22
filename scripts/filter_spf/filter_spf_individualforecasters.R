@@ -33,9 +33,8 @@ for(i in 1:nrow(combs)){
 
   res_spf_filter_indiv <- vector(mode = "list", length = length(fcsts))
   res_spf_additionalinfo_indiv <- vector(mode = "list", length = length(fcsts))
-
-  for(k in length(fcsts)){
-
+  print(length(fcsts))
+  for(k in 1:length(fcsts)){
     fcid <- fcsts[k]
 
     spf_curr_fcid <- spf_curr |>
