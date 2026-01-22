@@ -69,5 +69,11 @@ data.table::fwrite(res_spf_filter, here("data", paste0("filter_spf_data_individu
 data.table::fwrite(res_spf_additionalinfo, here("data", paste0("filter_spf_data_individual_supplementary", ".csv")))
 
 
+countdat <- res_spf_filter |>
+  DT(, .SD, .SDcols = c("origin_quarter", "origin_year", "forecaster_id")) |>
+  unique() |>
+  DT(, count := .N, by = c("forecaster_id")) |>
+  DT(, .SD, .SDcols = c("forecaster_id", "count")) |>
+  unique()
 
-
+data.table::fwrite(countdat, here("data", paste0("filter_spf_data_individual_counts", ".csv")))
