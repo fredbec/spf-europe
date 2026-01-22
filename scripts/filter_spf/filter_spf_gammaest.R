@@ -48,8 +48,8 @@ for(shft in -1:1){
   res_spf_filter <- rbindlist(res_spf_filter)
   res_spf_additionalinfo <- rbindlist(res_spf_additionalinfo)
 
-  data.table::fwrite(res_spf_filter, here("data", "filter_spf_data_medianfc_withus_withgammaest", "_month", shft+2, ".csv"))
-  data.table::fwrite(res_spf_additionalinfo, here("data", "filter_spf_data_medianfc_withus_withgammaest", "_month", shft+2, "_supplementary.csv"))
+  data.table::fwrite(res_spf_filter, here(paste0("data", "filter_spf_data_medianfc_withus_withgammaest", "_month", shft+2, ".csv")))
+  data.table::fwrite(res_spf_additionalinfo, here(paste0("data", "filter_spf_data_medianfc_withus_withgammaest", "_month", shft+2, "_supplementary.csv")))
 
 }
 
@@ -138,5 +138,5 @@ for(i in 1:nrow(combs)){
 res_spf_filter <- rbindlist(res_spf_filter)
 res_spf_additionalinfo <- rbindlist(res_spf_additionalinfo)
 
-data.table::fwrite(res_spf_filter, here("data", "filter_spf_data_medianfc_withip_withgammaest.csv"))
-data.table::fwrite(res_spf_additionalinfo, here("data", "filter_spf_data_medianfc_withip_withgammaest_supplementary.csv"))
+data.table::fwrite(res_spf_filter, here(paste0("data", "filter_spf_data_medianfc_withip_withgammaest.csv")))
+data.table::fwrite(res_spf_additionalinfo, here(paste0("data", "filter_spf_data_medianfc_withip_withgammaest_supplementary.csv")))
