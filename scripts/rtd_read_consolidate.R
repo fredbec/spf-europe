@@ -60,7 +60,7 @@ for(yrnum in start_yr:end_yr){
 
 rtd_pre14 <- rbindlist(reslist)
 
-data.table::fwrite(rtd_pre14, here("data", "revdatpre14.csv"))
+data.table::fwrite(rtd_pre14, here("data", "processed", "revdatpre14.csv"))
 
 ### real-time vintages starting from 2014, downloaded from
 ## https://ec.europa.eu/eurostat/databrowser/view/ei_na_q_vtg__custom_16834433/default/table?lang=en
@@ -75,7 +75,7 @@ rtd_post14 <- fread(here("data", "raw", "estat_ei_na_q_vtg_filtered_en.csv")) |>
   DT(, .SD, .SDcols = c("rgdp", "target_year", "target_quarter", "origin_year", "origin_month", "origin_day"))
 
 
-data.table::fwrite(rtd_post14, here("data", "revdatpost14.csv"))
+data.table::fwrite(rtd_post14, here("data", "processed", "revdatpost14.csv"))
 
 
 ### consolidate all into one dataset with growth rates
@@ -145,4 +145,4 @@ rtd <- rtd |>
   DT(, rgdp := NULL)
 
 
-data.table::fwrite(rtd, here("data", "revdatfull.csv"))
+data.table::fwrite(rtd, here("data", "processed", "revdatfull.csv"))
