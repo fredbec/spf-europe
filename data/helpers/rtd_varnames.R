@@ -65,4 +65,4 @@ varname_dat <-
     )
   )
 
-data.table::fwrite(varname_dat, here("data", "rtd_varnames.csv"))
+data.table::fwrite(varname_dat, here("data", "helpers", "rtd_varnames.csv"))
