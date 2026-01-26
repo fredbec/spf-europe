@@ -45,26 +45,26 @@ for(yrnum in start_yr:end_yr){
       DT(3:.N,) |>
       setnames("Name.", "target") |>
       setnames(c_varname, "rgdp") |>
-      DT(, target_quarter := substr(target, 2,2)) |>
-      DT(, target_year := substr(target, 4, 8)) |>
+      DT(, target_quarter := as.numeric(substr(target, 2,2))) |>
+      DT(, target_year := as.numeric(substr(target, 4, 8))) |>
       DT(, target := NULL) |>
       DT(, origin_year := yrnum) |>
       DT(, origin_month := as.numeric(mnum)) |>
-      DT(!grepl("NA*", rgdp))
+      DT(!grepl("NA*", rgdp)) |>
+      DT(, rgdp := as.numeric(rgdp))
+
 
   }
 
 }
 
-rtd_dat <- rbindlist(reslist)
+rtd_pre14 <- rbindlist(reslist)
 
-data.table::fwrite(rtd_dat, here("data", "revdatpre14.csv"))
-
-
+data.table::fwrite(rtd_pre14, here("data", "revdatpre14.csv"))
 
 ### real-time vintages starting from 2014, downloaded from
 ## https://ec.europa.eu/eurostat/databrowser/view/ei_na_q_vtg__custom_16834433/default/table?lang=en
-revdatpost14 <- fread(here("data", "raw", "estat_ei_na_q_vtg_filtered_en.csv")) |>
+rtd_post14 <- fread(here("data", "raw", "estat_ei_na_q_vtg_filtered_en.csv")) |>
   DT(, .SD, .SDcols = c("revdate", "TIME_PERIOD", "OBS_VALUE")) |>
   DT(, target_year := as.numeric(substr(TIME_PERIOD, 1, 4))) |>
   DT(, target_quarter := as.numeric(substr(TIME_PERIOD, 7,7))) |>
@@ -75,12 +75,12 @@ revdatpost14 <- fread(here("data", "raw", "estat_ei_na_q_vtg_filtered_en.csv")) 
   DT(, .SD, .SDcols = c("rgdp", "target_year", "target_quarter", "origin_year", "origin_month", "origin_day"))
 
 
-data.table::fwrite(revdatpost14, here("data", "revdatpost14.csv"))
+data.table::fwrite(rtd_post14, here("data", "revdatpost14.csv"))
 
 
 ### consolidate all into one dataset with growth rates
 
-rtd <- fread(here("data", "revdatpost14.csv")) |>
+rtd_post14 <- rtd_post14 |>
   #filter out months with two vintage releases
   DT(, number := .N,
      by = c("origin_year", "origin_month", "target_year", "target_quarter")) |>
@@ -93,7 +93,7 @@ rtd <- fread(here("data", "revdatpost14.csv")) |>
   DT(, c("number", "origin_day") := NULL)|>
   DT(, flag := "post")
 
-rtd_pre14 <- fread(here("data", "revdatpre14.csv")) |>
+rtd_pre14 <- rtd_pre14 |>
   setorder(origin_year, origin_month, target_year, target_quarter) |>
   DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
      by = .(origin_year, origin_month)) |>
@@ -101,7 +101,7 @@ rtd_pre14 <- fread(here("data", "revdatpre14.csv")) |>
   DT(!is.na(rgdp_growth)) |>
   DT(, flag := "pre")
 
-rtd <- rbind(rtd_pre14, rtd) |>
+rtd <- rbind(rtd_pre14, rtd_post14) |>
   DT(, number := .N,
      by = c("target_year", "target_quarter", "origin_year", "origin_month")) |>
   DT(, flag2 := (number > 1 & flag == "pre")) |>
