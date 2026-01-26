@@ -19,8 +19,7 @@ end_mth <- substr(end_release, 5, 6) |> as.numeric()
 #end_release_num <- end_yr + end_qrtr/4
 
 #read in variable names
-source(here("scripts", "rtd_varnames.R"))
-varnames <- fread(here("data", "rtd_varnames.csv"))
+varnames <- fread(here("data", "helpers", "rtd_varnames.csv"))
 
 #make
 reslist <- vector(mode = "list", length = length(start_yr:end_yr)*12)
@@ -38,7 +37,7 @@ for(yrnum in start_yr:end_yr){
 
     origin_name <- paste0(yrnum, mnum)
 
-    reslist[[j]] <- read.csv(here("data", "rtd_quarterly", paste0("quarterly_", origin_name, ".csv")),
+    reslist[[j]] <- read.csv(here("data", "raw", "rtd_quarterly", paste0("quarterly_", origin_name, ".csv")),
                          skip = 1,
                          header = TRUE) |>
       as.data.table() |>
@@ -65,7 +64,7 @@ data.table::fwrite(rtd_dat, here("data", "revdatpre14.csv"))
 
 ### real-time vintages starting from 2014, downloaded from
 ## https://ec.europa.eu/eurostat/databrowser/view/ei_na_q_vtg__custom_16834433/default/table?lang=en
-revdatpost14 <- fread(here("data", "estat_ei_na_q_vtg_filtered_en.csv")) |>
+revdatpost14 <- fread(here("data", "raw", "estat_ei_na_q_vtg_filtered_en.csv")) |>
   DT(, .SD, .SDcols = c("revdate", "TIME_PERIOD", "OBS_VALUE")) |>
   DT(, target_year := as.numeric(substr(TIME_PERIOD, 1, 4))) |>
   DT(, target_quarter := as.numeric(substr(TIME_PERIOD, 7,7))) |>
