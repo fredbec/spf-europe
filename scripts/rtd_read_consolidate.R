@@ -1,6 +1,5 @@
 library(here)
 library(data.table)
-library(lubridate)
 
 #chain operator for data.table
 DT <- `[`
@@ -29,14 +28,17 @@ for(yrnum in start_yr:end_yr){
   for(mnum in 1:12){
 
     c_varname <- varnames[year == yrnum & month == mnum]$varname
+    stopifnot(length(c_varname) == 1)
 
-    mnum <- ifelse(mnum < 10, paste0("0",mnum), paste0(mnum))
+    mnum_char <- sprintf("%02d", mnum)
 
 
     j <- j+1
 
-    origin_name <- paste0(yrnum, mnum)
+    origin_name <- paste0(yrnum, mnum_char)
 
+    # use read.csv because fread() fails due to ragged rows (inconsistent
+    # column counts across vintages)
     reslist[[j]] <- read.csv(here("data", "raw", "rtd_quarterly", paste0("quarterly_", origin_name, ".csv")),
                          skip = 1,
                          header = TRUE) |>
@@ -49,8 +51,8 @@ for(yrnum in start_yr:end_yr){
       DT(, target_year := as.numeric(substr(target, 4, 8))) |>
       DT(, target := NULL) |>
       DT(, origin_year := yrnum) |>
-      DT(, origin_month := as.numeric(mnum)) |>
-      DT(!grepl("NA*", rgdp)) |>
+      DT(, origin_month := mnum) |>
+      DT(trimws(rgdp) != "NA") |>
       DT(, rgdp := as.numeric(rgdp))
 
 
@@ -88,7 +90,6 @@ rtd_post14 <- rtd_post14 |>
   setorder(origin_year, origin_month, origin_day, target_year, target_quarter) |>
   DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
      by = .(origin_year, origin_month, origin_day)) |>
-  #DT(, rgdp := NULL) |>
   DT(!is.na(rgdp_growth)) |>
   DT(, c("number", "origin_day") := NULL)|>
   DT(, flag := "post")
@@ -97,7 +98,6 @@ rtd_pre14 <- rtd_pre14 |>
   setorder(origin_year, origin_month, target_year, target_quarter) |>
   DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
      by = .(origin_year, origin_month)) |>
-  #DT(, rgdp := NULL) |>
   DT(!is.na(rgdp_growth)) |>
   DT(, flag := "pre")
 
