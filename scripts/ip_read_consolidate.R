@@ -38,4 +38,4 @@ ipeu <- ipeu |>
   setnames("growth_rate", "ip")
 
 
-data.table::fwrite(ipeu, here("data", "ip_consolidated.csv"))
+data.table::fwrite(ipeu, here("data", "processed", "ip_consolidated.csv"))
