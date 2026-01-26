@@ -11,7 +11,7 @@ end_release <- "2024Q4"
 
 
 ##data with concrete release dates
-reldates <- read.delim(here("data", "spf_release_dates.txt"), sep = " ") |>
+reldates <- read.delim(here("data", "raw", "spf_release_dates.txt"), sep = " ") |>
   as.data.table() |>
   setnames("Date", "reldate") |>
   setnames("Deadline", "release_deadline") |>
@@ -48,7 +48,7 @@ for(release in seq(start_release_num, end_release_num, 0.25)){
   origin_yr <- substr(origin_name, 1, 4) |> as.numeric()
   origin_qrtr <- substr(origin_name, 6, 6) |> as.numeric()
 
-  spf_curr <- data.table::fread(here("data", "spf_raw_data", paste0(origin_name, ".csv")),
+  spf_curr <- data.table::fread(here("data", "raw", "spf_surveys", paste0(origin_name, ".csv")),
                                 skip = 1,
                                 header = TRUE)
 
@@ -94,10 +94,11 @@ alldata <- reldates[alldata, on = "reldate"] |>
                         "type_target", "type_format",
                         "release_deadline", "release_publication", "prediction"))
 
-data.table::fwrite(alldata, here("data", "spf_consolidated.csv"))
+data.table::fwrite(alldata, here("data", "processed", "spf_consolidated.csv"))
 
 #compute median forecasts
-spfdat_median <- fread(here("data", "spf_consolidated.csv")) |>
+spfdat_median <- alldata |>
+  copy() |>
   DT(type_target == "annual" & type_format == "POINT") |>
   DT(, horizon := target_year - forecast_year) |>
   DT(horizon <=1) |>
@@ -112,7 +113,8 @@ spfdat_median <- fread(here("data", "spf_consolidated.csv")) |>
   unique()
 
 #compute mean forecasts
-spfdat_mean <- fread(here("data", "spf_consolidated.csv")) |>
+spfdat_mean <- alldata |>
+  copy() |>
   DT(type_target == "annual" & type_format == "POINT") |>
   DT(, horizon := target_year - forecast_year) |>
   DT(horizon <=1) |>
@@ -126,5 +128,5 @@ spfdat_mean <- fread(here("data", "spf_consolidated.csv")) |>
                         "ens_fc")) |>
   unique()
 
-data.table::fwrite(spfdat_median, here("data", "spf_median_forecast.csv"))
-data.table::fwrite(spfdat_mean, here("data", "spf_mean_forecast.csv"))
+data.table::fwrite(spfdat_median, here("data", "processed", "spf_median_forecast.csv"))
+data.table::fwrite(spfdat_mean, here("data", "processed", "spf_mean_forecast.csv"))
