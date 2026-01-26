@@ -1,10 +1,17 @@
 ### Read in and merge SPF and RGDP data
-.prep_spf_data <- function(FilterOpt = NA, gamma_est = FALSE, spf_h = NA, Month = 1) {
+.prep_spf_data <- function(FilterOpt = NA, gamma_est = FALSE, spf_h = NA, Month = 1, IndivSPF = NA) {
 
   ### Read in filtered quarterly SPF forecasts
   if (is.na(FilterOpt)) {
-    # SPF without US
-    spf_data <- read.csv("data/filter_spf_data_medianfc_approx_err_calibrated.csv") # read.csv(sprintf("data/filter_spf_data_medianfc_month%d.csv", Month))
+
+    if (!is.data.frame(IndivSPF)) {
+      # Consensus SPF without US
+      spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
+
+    } else {
+      # Individual SPF
+      spf_data <- IndivSPF
+    }
 
     # SPF filter augmented by US-SPF
   } else if (FilterOpt == 'US_SPF') {
@@ -222,7 +229,7 @@
 
 ### Wrapper function calling prep_spf_data.R, filtered ECB-SPF consensus forecasts
 #   either with or without US-SPF/Industrial Production
-data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE, endMonth = 1) {
+data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE, endMonth = 1, SPFPanel = FALSE) {
 
   # Possible future input
   spf_h = NA
@@ -231,6 +238,41 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE, endMonth
 
     ### ECB-SPF filtered without US-SPF
     SPF <- .prep_spf_data(Month = endMonth)
+
+
+    if (SPFPanel) {
+      ### Panel of individual forecasts
+      IndivSPFall <- read.csv("data/filter_spf_data_individual.csv")
+      ForecastIDs <- unique(IndivSPFall$forecaster_id)
+
+
+      panel_list <- vector("list", length(ForecastIDs))
+      names(panel_list) <- ForecastIDs
+
+
+      for (i in seq_along(ForecastIDs)) {
+
+        fid <- ForecastIDs[i]
+
+        IndivSPF <- IndivSPFall %>%
+          filter(forecaster_id == fid) %>%
+          distinct(target_quarter, target_year,
+                   origin_quarter, origin_year,
+                   .keep_all = TRUE) %>%
+          select(-forecaster_id)
+
+        SPF_ind <- .prep_spf_data(IndivSPF = IndivSPF)
+
+        # extract only what you want
+        panel_list[[i]] <- SPF_ind$evaluation_data_ny %>%
+          mutate(forecaster_id = fid)
+      }
+
+      # Bind into a single panel data set
+      SPF_panel <- bind_rows(panel_list)
+
+    }
+
 
   } else if (FilterOpt == 'US_SPF') {
     ### ECB-SPF augmented by US-SPF
@@ -263,6 +305,11 @@ data_function_spf <- function(FilterOpt = NA, gamma_estimation = FALSE, endMonth
     ### ECB-SPF augmented Industrial Production
     SPF <- .prep_spf_data(FilterOpt, endMonth)
 
+  }
+
+  # Define Output
+  if (SPFPanel) {
+    SPF <- list(SPF, SPF_panel)
   }
 
   return(SPF)
