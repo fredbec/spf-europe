@@ -1,0 +1,7 @@
+run_id,name,start_year, end_year,approx_error,rtd_shift,release_US_SPF,gamma_est,git_commit
+"001","base",2001,2024,NA,-1,NA,NA,
+"002","month2",2001,2024,NA,0,NA,NA,
+"003","month3",2001,2024,NA,1,NA,NA,
+"004","base",2001,2024,0.01,-1,NA,NA,
+"005","month2",2001,2024,0.01,0,NA,NA,
+"006","month3",2001,2024,0.01,1,NA,NA,

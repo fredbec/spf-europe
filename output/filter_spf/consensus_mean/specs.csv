@@ -1,0 +1,5 @@
+key,value
+spec_id,consensus_mean
+data_input_primary,"spf_mean_forecast.csv"
+data_input_secondary,NA
+ensemble_stat,mean
