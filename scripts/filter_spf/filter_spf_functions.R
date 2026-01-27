@@ -356,7 +356,6 @@ run_filter_from_settings <- function(settings){
   } else {
 
     SPF_data <- SPF_data |>
-      DT(forecaster_id %in% c(1,2)) |>
       DT(type_format == "POINT") |>
       DT(type_target == "annual") |>
       DT(forecast_year >= 2001) |>
