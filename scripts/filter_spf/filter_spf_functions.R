@@ -266,3 +266,182 @@ filter_dat <- function(current_quarter,
 
 }
 
+
+
+run_filter <- function(combs,
+                       SPF_data,
+                       real_time_data,
+                       SPF_data_US,
+                       release_US_SPF = "latest",
+                       est_gamma,
+                       rtd_issue  ="latest_vintage",
+                       rtd_shift,
+                       approx_err){
+
+
+
+  res_spf_filter <- vector(mode = "list", length = nrow(combs))
+  res_spf_additionalinfo <- vector(mode = "list", length = nrow(combs))
+  for(i in 1:nrow(combs)){
+
+    cissue <- combs[i,]
+
+    cqu <- cissue$quarter
+    cyr <- cissue$year
+
+    res <- filter_dat(current_quarter = cqu,
+                      current_year = cyr,
+                      SPF_data = SPF_data,
+                      real_time_data = real_time_data,
+                      SPF_data_US = SPF_data_US,
+                      release_US_SPF = release_US_SPF,
+                      est_gamma = est_gamma,
+                      rtd_issue = rtd_issue,
+                      rtd_shift = rtd_shift,
+                      approx_err = approx_err)
+
+    res_spf_filter[[i]] <- res$spf_filter_dat
+    res_spf_additionalinfo[[i]] <- data.table(origin_quarter = cqu,
+                                              origin_year = cyr,
+                                              cy_logLik = res$ll["cy"],
+                                              cyandny_logLik = res$ll["cyandny"],
+                                              cy_rw_sd = res$params$cy["rw_sd"],
+                                              cyandny_rw_sd = res$params$cyandny["rw_sd"])
+  }
+  res_spf_filter <- rbindlist(res_spf_filter)
+  res_spf_additionalinfo <- rbindlist(res_spf_additionalinfo)
+
+  return(list(filter_output = res_spf_filter,
+              metadata = res_spf_additionalinfo))
+
+
+}
+
+
+run_filter_from_settings <- function(settings){
+
+  SPF_data <- data.table::fread(here("data", "processed", settings$data_input_primary))
+
+  if(!is.null(settings$data_input_secondary)){
+
+    SPF_data_US <- data.table::fread(here("data", "processed", settings$data_input_secondary))
+  } else {
+    SPF_data_US <- NULL
+  }
+
+  real_time_data <- fread(here("data", "processed", "revdatfull.csv")) |>
+    DT(is.na(rgdp_growth), rgdp_growth := NaN) |>
+    DT(is.na(rgdp_growth_ann), rgdp_growth_ann := NaN)
+
+  #make a combination of all years and quarters, to loop over
+  quarters <- 1:4
+  years <- settings$start_year:settings$end_year
+
+  combs <- CJ(year = years,
+              quarter = quarters)
+
+
+  if(is.null(SPF_data$forecaster_id)){
+    filter_result <- run_filter(
+      combs = combs,
+      SPF_data = SPF_data,
+      real_time_data = real_time_data,
+      SPF_data_US = SPF_data_US,
+      release_US_SPF = settings$release_US_SPF,
+      est_gamma = settings$gamma_est,
+      rtd_issue = "latest_vintage",
+      rtd_shift = settings$rtd_shift,
+      approx_err = settings$approx_error
+    )
+  } else {
+
+    SPF_data <- SPF_data |>
+      DT(forecaster_id %in% c(1,2)) |>
+      DT(type_format == "POINT") |>
+      DT(type_target == "annual") |>
+      DT(forecast_year >= 2001) |>
+      setnames("prediction", "ens_fc") #for compatibility
+
+    SPF_data <- split(SPF_data, by = "forecaster_id")
+
+    filter_result <- lapply(
+      SPF_data,
+      function(spf_dat_indiv){
+        run_filter(
+          combs = combs,
+          SPF_data = spf_dat_indiv,
+          real_time_data = real_time_data,
+          SPF_data_US = SPF_data_US,
+          release_US_SPF = settings$release_US_SPF,
+          est_gamma = settings$gamma_est,
+          rtd_issue = "latest_vintage",
+          rtd_shift = settings$rtd_shift,
+          approx_err = settings$approx_error
+        ) |>
+          lapply(function(dat){
+            dat |>
+              DT(, forecaster_id := unique(spf_dat_indiv$forecaster_id))
+          })
+      })
+    temp <- vector(mode = "list", length = 2)
+    temp[[1]] <- rbindlist(lapply(filter_result, `[[`, 1))
+    temp[[2]] <- rbindlist(lapply(filter_result, `[[`, 2))
+
+    filter_result <- list(filter_output = temp[[1]],
+                          metadata = temp[[2]])
+  }
+
+  return(filter_result)
+}
+
+na_to_null <- function(x) if (is.na(x)) NULL else x
+
+read_spec <- function(spec_id) {
+  path <- file.path("output/filter_spf", spec_id, "specs.csv")
+  stopifnot(file.exists(path))
+  spec <- read.csv(path, stringsAsFactors = FALSE)
+  as.list(setNames(spec$value, spec$key))
+}
+
+read_run <- function(spec_id, run_id) {
+  path <- file.path("output/filter_spf", spec_id, "runs.csv")
+  runs <- read.csv(path, stringsAsFactors = FALSE)
+  run <- runs[runs$run_id == run_id, ]
+  stopifnot(nrow(run) == 1)
+  as.list(run)
+}
+
+merge_reformat_settings <- function(spec, run) {
+  c(spec, run) |>
+    lapply(na_to_null)
+
+}
+
+write_outputs <- function(results, settings, base_path = "output/filter_spf") {
+
+  #  Build directory path
+  spec_dir <- file.path(base_path, settings$spec_id)
+
+  # Define base filename prefix
+  prefix <- sprintf("%03d", settings$run_id)
+  #name <- paste0(settings$name)
+
+  # Write filtered results
+  if (!is.null(results$filter_output)) {
+    filtered_file <- file.path(spec_dir, paste0(prefix, "_run", ".csv"))
+    data.table::fwrite(results$filter_output, filtered_file)
+  }
+
+  # Write estimated parameters / metadata
+  if (!is.null(results$metadata)) {
+    # Ensure it's a data frame
+
+    meta_file <- file.path(spec_dir, paste0(prefix, "_metadata.csv"))
+    data.table::fwrite(results$metadata, meta_file)
+
+
+  }
+
+  # Optional message
+  message("Outputs saved for ", settings$spec_id, " / ", settings$run_id)
+}
