@@ -181,7 +181,7 @@ filter_dat <- function(current_quarter,
   if(is.null(SPF_data_US)){
 
     # Calibration of approximation error to observed data (Code should be improved)
-    if (is.nan(approx_err)) {
+    if (is.null(approx_err)) {
       test = cbind(data_filter_cy$rgdp_growth,data_filter_cy$rgdp_growth_ann)
 
       if (all(is.na(test[,2]))) {
