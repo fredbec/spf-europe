@@ -397,14 +397,14 @@ run_filter_from_settings <- function(settings){
 na_to_null <- function(x) if (is.na(x)) NULL else x
 
 read_spec <- function(spec_id) {
-  path <- file.path("output/filter_spf", spec_id, "specs.csv")
+  path <- here("output", "filter_spf", spec_id, "specs.csv")
   stopifnot(file.exists(path))
   spec <- read.csv(path, stringsAsFactors = FALSE)
   as.list(setNames(spec$value, spec$key))
 }
 
 read_run <- function(spec_id, run_id) {
-  path <- file.path("output/filter_spf", spec_id, "runs.csv")
+  path <- here("output", "filter_spf", spec_id, "runs.csv")
   runs <- read.csv(path, stringsAsFactors = FALSE)
   run <- runs[runs$run_id == run_id, ]
   stopifnot(nrow(run) == 1)
@@ -420,7 +420,7 @@ merge_reformat_settings <- function(spec, run) {
 write_outputs <- function(results, settings, base_path = "output/filter_spf") {
 
   #  Build directory path
-  spec_dir <- file.path(base_path, settings$spec_id)
+  spec_dir <- here("output", "filter_spf", settings$spec_id)
 
   # Define base filename prefix
   prefix <- sprintf("%03d", settings$run_id)
@@ -428,15 +428,13 @@ write_outputs <- function(results, settings, base_path = "output/filter_spf") {
 
   # Write filtered results
   if (!is.null(results$filter_output)) {
-    filtered_file <- file.path(spec_dir, paste0(prefix, "_run", ".csv"))
+    filtered_file <- here(spec_dir, paste0(prefix, "_run", ".csv"))
     data.table::fwrite(results$filter_output, filtered_file)
   }
 
   # Write estimated parameters / metadata
   if (!is.null(results$metadata)) {
-    # Ensure it's a data frame
-
-    meta_file <- file.path(spec_dir, paste0(prefix, "_metadata.csv"))
+    meta_file <- here(spec_dir, paste0(prefix,"_metadata.csv"))
     data.table::fwrite(results$metadata, meta_file)
 
 
