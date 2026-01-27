@@ -11,7 +11,7 @@ for(spec_id in c("consensus_median", "consensus_mean", "individual")){
   spec <- read_spec(spec_id)
 
   runs <- read.csv(
-    file.path("output/filter_spf", spec_id, "runs.csv"),
+    here("output", "filter_spf", spec_id, "runs.csv"),
     stringsAsFactors = FALSE
   )
 
