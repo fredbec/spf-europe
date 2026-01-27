@@ -6,7 +6,7 @@
 
     if (!is.data.frame(IndivSPF)) {
       # Consensus SPF without US
-      spf_data <- read.csv("data/filter_spf_data_medianfc.csv")
+      spf_data <- read.csv("output/filter_spf/consensus_median/001_run.csv")
 
     } else {
       # Individual SPF
@@ -51,8 +51,8 @@
   }
 
   # Read in real-time GDP
-  rgdp_pre  <- read.csv("data/revdatpre14.csv")
-  rgdp_post <- read.csv("data/revdatpost14.csv")
+  rgdp_pre  <- read.csv("data/processed/revdatpre14.csv")
+  rgdp_post <- read.csv("data/processed/revdatpost14.csv")
 
   # Merge GDP
   rgdp_pre <- rgdp_pre[ - which(rgdp_pre$origin_year == 2014 & rgdp_pre$origin_month > 9), ]
@@ -113,7 +113,7 @@
   ### Actuals of RGDP
 
   # First or second release of RGDP as actuals
-  release <- 3
+  release <- 1
 
   # Keep second releases
   rgdp_rel <- rgdp_all %>%
@@ -160,7 +160,7 @@
   ### Yearly data for yearly evaluation
 
   # Yearly SPF forecasts
-  spf_yearly <- read.csv("data/spf_median_forecast.csv")
+  spf_yearly <- read.csv("data/processed/spf_median_forecast.csv")
 
   # Compute yearly GDP growth rates
   rgdp_yearly <- rgdp %>%
