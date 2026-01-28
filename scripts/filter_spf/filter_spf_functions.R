@@ -363,11 +363,29 @@ run_filter_from_settings <- function(settings){
 
     SPF_data <- split(SPF_data, by = "forecaster_id")
 
+
+    #get only combs for which forecaster id has submitted
+    fcid_combs <- lapply(SPF_data, function(fcdat){
+
+      fcdat_sub <- fcdat |>
+        DT(, .SD, .SDcols = c("forecast_year", "forecast_quarter")) |>
+        unique()|>
+        setnames(c("forecast_year", "forecast_quarter"), c("year", "quarter"))
+
+      combs_sub <- merge(combs, fcdat_sub, by = c("year", "quarter"), all = FALSE)
+
+      return(combs_sub)
+    })
+
+
     filter_result <- lapply(
       SPF_data,
       function(spf_dat_indiv){
+
+        fcid <- unique(spf_dat_indiv$forecaster_id)
+
         run_filter(
-          combs = combs,
+          combs = fcid_combs[[as.character(fcid)]],
           SPF_data = spf_dat_indiv,
           real_time_data = real_time_data,
           SPF_data_US = SPF_data_US,
@@ -379,7 +397,7 @@ run_filter_from_settings <- function(settings){
         ) |>
           lapply(function(dat){
             dat |>
-              DT(, forecaster_id := unique(spf_dat_indiv$forecaster_id))
+              DT(, forecaster_id := fcid)
           })
       })
     temp <- vector(mode = "list", length = 2)
