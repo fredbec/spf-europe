@@ -272,7 +272,7 @@ process_spf <- function() {
     DT(, horizon := target_year - forecast_year) |>
     DT(horizon <=1) |>
     DT(!is.na(prediction)) |>
-    DT(, ens_fc := median(prediction), by = c("target_year",
+    DT(, ens_fc := mean(prediction), by = c("target_year",
                                               "forecast_year",
                                               "forecast_quarter")) |>
     DT(, .SD, .SDcols = c("target_year",
