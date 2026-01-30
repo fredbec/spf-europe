@@ -1,9 +1,11 @@
 rm(list = ls())
 cat("\014")
 
-library(dplyr)
-library(here)
+library(dplyr)      # For data manipulation: filtering, mutating, grouping, etc.
+library(zoo)        # Provides 'yearqtr' and 'yearmon' classes
+library(tidyr)      # For reshaping data
 
+library(here)
 source(here("scripts", "clean_filtered_spf", "clean_quarterly_spf_functions.R"))
 
 
