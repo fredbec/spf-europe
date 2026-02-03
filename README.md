@@ -2,6 +2,10 @@
 
 We construct real-time compatible quarterly forecasts for growth in the EU, using annual consensus forecasts from the ECB Survey of Professional Forecasts (SPF).
 
+This procedure is performed with a Kalman filter (and smoother) algorithm, which infers plausible quarterly forecast paths based on the annual forecasts provided in the SPF survey. Annual consensus forecasts are generated with the median or mean.
+
+Real-time vintage data is obtained from the ECB Data Portal.
+
 ## Contents of this repository
 The folders contain the following:
 
