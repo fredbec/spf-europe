@@ -2,6 +2,7 @@ rm(list = ls())
 cat("\014")
 
 library(dplyr)      # For data manipulation: filtering, mutating, grouping, etc.
+library(lubridate)  # For working with dates: constructing and extracting year, month, etc.
 library(zoo)        # Provides 'yearqtr' and 'yearmon' classes
 library(tidyr)      # For reshaping data
 

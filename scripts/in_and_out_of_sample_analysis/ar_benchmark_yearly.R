@@ -28,7 +28,7 @@
 #' @examples
 #' \dontrun{
 #' # Suppose rgdp_data is a tibble with the required columns
-#' forecasts <- AR_benchmark(
+#' forecasts <- ar_benchmark(
 #'   rgdp = rgdp_data,
 #'   ar_length = 30,
 #'   rw_length = 10,
@@ -42,7 +42,7 @@
 #' }
 #' #'
 #' @export
-AR_benchmark_yearly = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, endMonth = 2) {
+ar_benchmark_yearly = function(rgdp, ar_length, rw_length, max_lag, SampleEnd, endMonth = 2) {
 
   # Specify evaluation sample
   ref_qtrs <- seq(as.yearqtr("2001 Q1", format = "%Y Q%q"), # Has to be correctly chosen!
