@@ -8,10 +8,18 @@ library(ggplot2)    # For plotting
 
 library(here)
 
+
+# Read in filtered SPF forecasts
 SPF <- readRDS(
   here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_median_full.rds")
 )
 SPF <- SPF$SPF_consensus
+
+SPF_panel <- readRDS(
+  here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_panel_full.rds")
+)
+SPF_panel <- SPF_panel$SPF_panel
+
 
 
 ### Quick plots
@@ -108,6 +116,23 @@ for(i in 0:4){
   dev.off()
 
 }
+
+
+### Some information on the panel of forecasters
+
+# How many panelists per quarter
+panel_size_ts <- SPF_panel %>%
+  group_by(ref_period) %>%
+  summarise(
+    n_panelists = sum(!is.na(spf_h0)),
+    .groups = "drop"
+  ) %>%
+  arrange(ref_period)
+
+panel_size_ts_trimmed <- panel_size_ts[1:(nrow(panel_size_ts) - 4), ]
+
+# Summary
+summary(panel_size_ts_trimmed$n_panelists)
 
 
 
