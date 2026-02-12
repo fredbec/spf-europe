@@ -140,7 +140,8 @@ summary(panel_size_ts_trimmed$n_panelists)
 #### Forecasts from AR Benchmark models
 source(here("scripts", "in_and_out_of_sample_analysis", "ar_benchmark_quarterly.R"))
 source(here("scripts", "in_and_out_of_sample_analysis", "ar_benchmark_yearly.R"))
-source(here("scripts", "in_and_out_of_sample_analysis", "bias_test.R"))
+source(here("scripts", "in_and_out_of_sample_analysis", "rmse_bias.R"))
+source(here("scripts", "in_and_out_of_sample_analysis", "mz_reg.R"))
 
 # Quarterly GDP growth forecasts
 AR_bench_quarterly <- ar_benchmark_quarterly(SPF$rgdp_all, ar_length = 30,
@@ -160,13 +161,10 @@ AR_bench_yearly <- ar_benchmark_yearly(SPF$rgdp_all, ar_length = 30,
 
 #### Forecast analysis
 
-### Calculate bias and RMSE of SPF forecasts
+### RMSE of SPF forecasts
 dropYears  <- NA # cbind(2009, 2009)
 evalPeriod <- cbind(2002,2019)
 
-
-# Bias (Mean Error) of filtered SPF using current and next year projections
-SPF_ME <- SPF_bias(SPF$evaluation_data_ny, DropPeriod = dropYears, EvalPeriod = evalPeriod)
 
 # Evaluation of quarterly filtered SPF against benchmark models
 RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF$evaluation_data_ny, AR_bench_quarterly,
@@ -183,9 +181,6 @@ RMSE_yearly <- SPF_RMSE_DM_Test_yearly(SPF$spf_annual, AR_bench_yearly,
 
 #### Print the results
 
-# Bias of quarterly SPF
-round(SPF_ME,2)
-
 # Root Mean Squared Errors of quarterly SPF
 RMSE_quarterly$RMSE
 
@@ -196,6 +191,32 @@ RMSE_quarterly$DM_stars
 # RMSE and DM test of yearly SPF forecasts
 round(RMSE_yearly$RMSE_yearly,2)
 RMSE_yearly$DM_stars_yearly
+
+
+
+
+
+#### Bias, MZ-regression, forecast efficiency
+
+### Consensus forecasts
+SPF_cons <- SPF$evaluation_data_ny %>%
+  filter(target_year >= evalPeriod[1],
+         target_year <= evalPeriod[2])
+
+
+# Bias (Mean Error) of filtered quarterly SPF using current and next year projections
+SPF_ME <- SPF_bias(SPF_cons, DropPeriod = dropYears, EvalPeriod = evalPeriod)
+round(SPF_ME,2)
+
+# Mincer-Zarnowitz regressions
+MZReg_cons <- MZReg(SPF_cons, EvalPeriod = evalPeriod)
+print(MZReg_cons)
+
+
+
+
+
+
 
 
 

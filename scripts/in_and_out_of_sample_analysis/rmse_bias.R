@@ -2,7 +2,6 @@ library(sandwich)   # For Newey-West standard errors
 library(lmtest)     # For coeftest()
 
 
-
 #' SPF Forecast Bias Test
 #'
 #' Computes bias in SPF GDP forecasts across horizons (h = 0,...,4)
@@ -48,8 +47,9 @@ SPF_bias <- function(spf_data, EvalPeriod = cbind(2002, 2019), DropPeriod = NA) 
     # Fit regression
     model <- lm(formula, data = evaluation_data)
 
-    # Newey-West SE (you can choose lag = h or any rule-of-thumb)
-    nw <- coeftest(model, vcov = NeweyWest(model, lag = h, prewhite = FALSE))
+    # Newey-West SE
+    lag_ruleOfThumb <- as.integer( dim(evaluation_data)[1]^0.25 )
+    nw <- coeftest(model, vcov = NeweyWest(model, lag = lag_ruleOfThumb, prewhite = FALSE))
 
     # Return horizon, estimate, SE, and p-value
     tibble(
