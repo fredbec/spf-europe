@@ -2,7 +2,7 @@ library(sandwich)   # For Newey-West standard errors
 library(lmtest)     # For coeftest()
 
 
-#' SPF Forecast Bias Test
+#' Consensus SPF Forecast Bias Test
 #'
 #' Computes bias in SPF GDP forecasts across horizons (h = 0,...,4)
 #' using OLS with Newey–West standard errors.
@@ -48,7 +48,7 @@ SPF_bias <- function(spf_data, EvalPeriod = cbind(2002, 2019), DropPeriod = NA) 
     model <- lm(formula, data = evaluation_data)
 
     # Newey-West SE
-    lag_ruleOfThumb <- as.integer( dim(evaluation_data)[1]^0.25 )
+    lag_ruleOfThumb <- max(4, as.integer( dim(evaluation_data)[1]^0.25 ) ) # floor(4*(dim(evaluation_data)[1]/100)^(2/9))
     nw <- coeftest(model, vcov = NeweyWest(model, lag = lag_ruleOfThumb, prewhite = FALSE))
 
     # Return horizon, estimate, SE, and p-value
@@ -69,8 +69,7 @@ SPF_bias <- function(spf_data, EvalPeriod = cbind(2002, 2019), DropPeriod = NA) 
 
 
 
-
-#' SPF RMSE and Diebold–Mariano Test (Quarterly)
+#' Consensus SPF RMSE and Diebold–Mariano Test (Quarterly)
 #'
 #' Computes RMSEs and Diebold–Mariano statistics comparing SPF GDP
 #' forecasts to benchmark models across horizons h = 0,...,4.
@@ -178,7 +177,7 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
 
     # Lag length for HAC standard errors
     if (is.na(lagLength)) {
-      lags <- as.integer( n^0.25 )
+      lags <- max(4, as.integer( n^0.25 ) ) # floor(4*( n /100)^(2/9))
     } else {
       lags <- lagLength
     }
@@ -253,8 +252,7 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
 
 
 
-
-#' SPF RMSE and Diebold–Mariano Test (Yearly)
+#' Consensus SPF RMSE and Diebold–Mariano Test (Yearly)
 #'
 #' Computes RMSEs and Diebold–Mariano statistics comparing annual SPF GDP
 #' forecasts to benchmark models by horizon (y1–y2) and forecast quarter.
@@ -490,6 +488,7 @@ SPF_RMSE_DM_Test_yearly <- function(spf_annual, ar_benchmark_data,
       n <- length(Loss_spf_dar_alt)
 
       lags <- if (is.na(lagLength)) as.integer(n^0.25) else lagLength
+      # lags <- if (is.na(lagLength)) floor(4*( n /100)^(2/9)) else lagLength
 
       # Define a helper function to run DM test and get statistic
       run_dm_test <- function(loss_diff) {
@@ -537,4 +536,83 @@ SPF_RMSE_DM_Test_yearly <- function(spf_annual, ar_benchmark_data,
 
   output <- list(RMSE_yearly = RMSE_yearly, DM_Test_yearly = DM_Test_yearly, DM_stars_yearly = DM_stars)
   return(output)
+}
+
+
+
+
+#' Panel SPF Forecast Bias Test
+#'
+#' Tests bias in SPF forecasts for each horizon h = 0,...,4 across forecasters
+#' by regressing forecast errors on a constant and computing
+#' cluster-robust standard errors (clustered by forecaster_id).
+#'
+#' @param SPF_panel Data frame with individual SPF forecasts (`spf_h0`–`spf_h4`),
+#'        realized GDP growth (`gdp_growth`), and `forecaster_id`.
+#' @param EvalPeriod Numeric vector of length 2 giving start and end years for evaluation (default: c(2002, 2019)).
+#' @param digits Number of digits to round output (default: 3).
+#' @param DropPeriod Optional matrix of periods (start–end years) to exclude from evaluation.
+#'
+#' @return Data frame with bias estimates (alpha), cluster-robust SEs,
+#'         N, and horizon as row names.
+#' @export
+BiasSPFPanel <- function(SPF_panel, EvalPeriod = c(2002, 2019), digits = 3, DropPeriod = NA) {
+
+  # Filter evaluation period
+  SPF_panel <- SPF_panel %>%
+    filter(target_year >= EvalPeriod[1],
+           target_year <= EvalPeriod[2])
+
+  # Drop periods if specified
+  if (any(!is.na(DropPeriod))) {
+    for (i in 1:nrow(DropPeriod)) {
+      SPF_panel <- SPF_panel %>%
+        filter(!(target_year %in% (DropPeriod[i,1]:DropPeriod[i,2])))
+    }
+  }
+
+  # Horizons
+  horizons <- 0:4
+
+  # Run bias regressions
+  bias_results <- lapply(horizons, function(h) {
+
+    df <- SPF_panel %>%
+      mutate(f = .data[[paste0("spf_h", h)]],
+             y = gdp_growth) %>%
+      filter(!is.na(f), !is.na(forecaster_id))
+
+    model <- lm(y - f ~ 1, data = df)   # bias = forecast error regressed on constant
+
+    # Cluster-robust covariance by forecaster
+    vcov_cluster <- vcovCL(model, cluster = df$forecaster_id)
+
+    list(model = model,
+         vcov  = vcov_cluster,
+         df    = df)
+  })
+
+
+  # Build table
+  fmt <- function(coef, se) {
+    paste0("$\\underset{(", se, ")}{", coef, "}$")
+  }
+
+  bias_table <- data.frame(
+    horizon = horizons,
+
+    alpha = mapply(fmt,
+                   sapply(bias_results, function(x) round(coef(x$model)[1], digits)),
+                   sapply(bias_results, function(x) round(sqrt(diag(x$vcov))[1], digits))
+    ),
+
+    N = sapply(bias_results, function(x) nobs(x$model))
+  )
+
+  # Set horizon as row names
+  row.names(bias_table) <- bias_table$horizon
+  bias_table$horizon <- NULL
+
+  return(bias_table)
+
 }
