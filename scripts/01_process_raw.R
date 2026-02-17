@@ -93,35 +93,58 @@ process_rtd <- function() {
     DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
        by = .(origin_year, origin_month, origin_day)) |>
     DT(!is.na(rgdp_growth)) |>
-    DT(, c("number", "origin_day") := NULL)|>
-    DT(, flag := "post")
+    DT(, c("number") := NULL)|>
+    DT(origin_year >= 2015) #potentially change later
 
   rtd_pre14 <- rtd_pre14 |>
     setorder(origin_year, origin_month, target_year, target_quarter) |>
     DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
        by = .(origin_year, origin_month)) |>
     DT(!is.na(rgdp_growth)) |>
-    DT(, flag := "pre")
+    DT(, origin_day := ifelse(origin_month == 2, 28,
+                              ifelse(origin_month %in% c(1,3,5,7,8,10,12), 31,
+                                     30)))
 
   rtd <- rbind(rtd_pre14, rtd_post14) |>
-    DT(, number := .N,
-       by = c("target_year", "target_quarter", "origin_year", "origin_month")) |>
-    DT(, flag2 := (number > 1 & flag == "pre")) |>
-    DT(flag2 == FALSE) |> # filter out duplicates
-    DT(, c("number", "flag2", "flag") := NULL)
+    DT(, imputed := FALSE)
 
-  rtd_full <- CJ(origin_month = 1:12,
-                 origin_year = unique(rtd$origin_year),
-                 target_quarter = 1:4,
-                 target_year = unique(rtd$target_year))
+  revdates <- rtd |>
+    DT(, .SD, .SDcols = c("origin_year", "origin_month", "origin_day")) |>
+    unique()
 
-  rtd_full <- merge(rtd_full, rtd, by = c("origin_year", "origin_month",
+  #some revisions are not included as they
+  fictional_revdates <- CJ(origin_month = 1:12,
+                           origin_year = unique(rtd$origin_year)) |>
+    DT(, origin_day := ifelse(origin_month == 2, 28,
+                              ifelse(origin_month %in% c(1,3,5,7,8,10,12), 31,
+                                     30)))
+
+  revdates <- rbind(revdates, fictional_revdates) |>
+    unique() |>
+    DT(, tmp := 1)
+
+  targets <- CJ(
+    target_quarter = 1:4,
+    target_year = unique(rtd$target_year)
+  ) |>
+    DT(, tmp := 1)
+
+  # Cartesian join
+  rtd_full <- revdates[
+    targets,
+    on = "tmp",
+    allow.cartesian = TRUE
+  ] |>
+    DT(, tmp := NULL)
+
+  rtd_full <- merge(rtd_full, rtd, by = c("origin_year", "origin_month", "origin_day",
                                           "target_quarter", "target_year"), all.x = TRUE) |>
-    setorder(origin_year, origin_month) |>
+    setorder(origin_year, origin_month, origin_day) |>
     #kick out first observation (as growth rate is NA)
     DT(, fill := (target_quarter == 1 & target_year == 1991)) |>
     DT(fill == FALSE) |>
-    DT(, fill := NULL)
+    DT(, fill := NULL) |>
+    DT(is.na(imputed), imputed := TRUE)
 
   #fill in missing values by carrying forward the last vintage
   rtd_full[, rgdp_growth := zoo::na.locf(rgdp_growth, na.rm = FALSE),
@@ -133,7 +156,7 @@ process_rtd <- function() {
   rtd <- rtd_full |>
     DT(target_year <= origin_year) |>
     DT(, rgdp_growth := ifelse(is.na(rgdp_growth), NaN, rgdp_growth)) |>
-    setorder(origin_year, origin_month, target_year, target_quarter)
+    setorder(origin_year, origin_month, origin_day, target_year, target_quarter)
 
 
   rtd <- rtd |>
