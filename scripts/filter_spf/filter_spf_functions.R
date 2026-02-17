@@ -4,6 +4,7 @@ source(here("scripts", "kalman_filter_us_gamma.R"))
 
 get_rtd <- function(real_time_data,
                     current_issue,
+                    current_year,
                     rtd_issue = c("latest_vintage", "rtd"),
                     vintage_id = NULL){
 
@@ -14,16 +15,17 @@ get_rtd <- function(real_time_data,
   if(rtd_issue == "latest_vintage"){
     truth_dat <- real_time_data |>
       copy() |>
-      DT(origin_year == current_issue$year &
-           origin_month == current_issue$month) |>
+      DT(origin_year == lubridate::year(current_issue) &
+           origin_month == lubridate::month(current_issue) &
+           origin_day == lubridate::day(current_issue)) |>
       #delete redundant info
-      DT(, c("origin_year", "origin_month") := NULL)
+      DT(, c("origin_year", "origin_month", "origin_day") := NULL)
 
     #explicitly append NA values for current and next year
     #first generate all NA data.table for current and next year
-    na_obs <- CJ(target_year = c(current_issue$year - 1,
-                                 current_issue$year,
-                                 current_issue$year + 1),
+    na_obs <- CJ(target_year = c(current_year - 1,
+                                 current_year,
+                                 current_year + 1),
                  target_quarter = 1:4,
                  rgdp_growth = NaN)
 
@@ -54,15 +56,27 @@ get_rtd <- function(real_time_data,
 #shift = -1 will get first month in quarter (e.g. April for Q2), shift = 1
 #will get last month in quarter (e.g. June for Q2)
 get_current_issue <- function(shift,
+                              rtd_match_data,
                               current_quarter,
                               current_year)  {
 
-  qstart_month <- (current_quarter - 1) * 3 + 1
-  cmonth <- qstart_month + (shift + 1)
+  origin_quarter <- current_quarter - shift
 
-  ciss <- list(month = cmonth, year = current_year)
+  if(origin_quarter == 0){
+    filter_quarter <- 4
+    filter_year <- current_year - 1
+  } else {
+    filter_quarter <- current_quarter
+    filter_year <- current_year
+  }
 
-  return(ciss)
+
+  rtd_date <- rtd_match_data |>
+    DT(origin_year == filter_year & origin_quarter == filter_quarter)
+
+  rtd_date <- rtd_date$closest_rtd_release
+
+  return(rtd_date)
 
 }
 
@@ -74,7 +88,8 @@ filter_dat <- function(current_quarter,
                        release_US_SPF = "latest",
                        est_gamma = FALSE,
                        rtd_issue = c("latest_vintage", "rtd"),
-                       rtd_shift = -1,
+                       rtd_shift = 0,
+                       rtd_match_data,
                        approx_err = 0.01){
 
   if(length(rtd_issue) > 1){
@@ -85,8 +100,10 @@ filter_dat <- function(current_quarter,
   DT <- `[`
 
 
+
   #get current issue
   current_issue <- get_current_issue(shift = rtd_shift,
+                                     rtd_match_data = rtd_match_data,
                                      current_quarter = current_quarter,
                                      current_year = current_year)
 
@@ -95,6 +112,7 @@ filter_dat <- function(current_quarter,
   #could also implement a rolling window approach
   truth_dat <- get_rtd(real_time_data = real_time_data,
                        current_issue = current_issue,
+                       current_year = current_year,
                        rtd_issue = rtd_issue) |>
     setorder(target_year, target_quarter)
 
@@ -120,7 +138,6 @@ filter_dat <- function(current_quarter,
     DT(target_quarter == 4 & target_year %in% c(current_year, current_year+1),
        "spf_fc" := spf_fcs) |>
     DT(is.na(spf_fc), spf_fc := NaN)
-
 
   if(!is.null(SPF_data_US)){
 
@@ -276,6 +293,7 @@ run_filter <- function(combs,
                        est_gamma,
                        rtd_issue  ="latest_vintage",
                        rtd_shift,
+                       rtd_match_data,
                        approx_err){
 
 
@@ -298,7 +316,9 @@ run_filter <- function(combs,
                       est_gamma = est_gamma,
                       rtd_issue = rtd_issue,
                       rtd_shift = rtd_shift,
+                      rtd_match_data = rtd_match_data,
                       approx_err = approx_err)
+
 
     res_spf_filter[[i]] <- res$spf_filter_dat
     res_spf_additionalinfo[[i]] <- data.table(origin_quarter = cqu,
@@ -331,7 +351,10 @@ run_filter_from_settings <- function(settings){
 
   real_time_data <- fread(here("data", "processed", "revdatfull.csv")) |>
     DT(is.na(rgdp_growth), rgdp_growth := NaN) |>
-    DT(is.na(rgdp_growth_ann), rgdp_growth_ann := NaN)
+    DT(is.na(rgdp_growth_ann), rgdp_growth_ann := NaN) |>
+    DT(, imputed := NULL)
+
+  spf_deadlines_match <- fread(here("data", "helpers", "spf_deadlines_match_rtd.csv"))
 
   #make a combination of all years and quarters, to loop over
   quarters <- 1:4
@@ -351,6 +374,7 @@ run_filter_from_settings <- function(settings){
       est_gamma = settings$gamma_est,
       rtd_issue = "latest_vintage",
       rtd_shift = settings$rtd_shift,
+      rtd_match_data = spf_deadlines_match,
       approx_err = settings$approx_error
     )
   } else {
@@ -393,6 +417,7 @@ run_filter_from_settings <- function(settings){
           est_gamma = settings$gamma_est,
           rtd_issue = "latest_vintage",
           rtd_shift = settings$rtd_shift,
+          rtd_match_data = spf_deadlines_match,
           approx_err = settings$approx_error
         ) |>
           lapply(function(dat){
