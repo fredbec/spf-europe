@@ -172,12 +172,27 @@ data_function_spf <- function(ConsensusMedian = TRUE, SPFPanel = FALSE) {
     mutate(ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q")) %>%
     select(-target_year, -target_quarter)
 
-  evaluation_data_cy <- rgdp_rel %>%
-    left_join(spf_forecasts_cy, by = "ref_period") # %>%
-  # filter(ref_period >= as.yearqtr("2002 Q1", format = "%Y Q%q"))
+  evaluation_data_cy <- full_join(
+    spf_forecasts_cy,
+    rgdp_rel %>%
+      distinct(ref_period, .keep_all = TRUE),  # keep all GDP vars
+    by = "ref_period"
+  ) %>%
+    arrange(ref_period)
 
-  evaluation_data_ny <- rgdp_rel %>%
-    left_join(spf_forecasts_ny, by = "ref_period")
+
+  evaluation_data_ny <- full_join(
+    spf_forecasts_ny,
+    rgdp_rel %>%
+      distinct(ref_period, .keep_all = TRUE),  # keep all GDP vars
+    by = "ref_period"
+  ) %>%
+    arrange(ref_period)
+
+
+
+  #evaluation_data_ny <- rgdp_rel %>%
+  #  left_join(spf_forecasts_ny, by = "ref_period")
 
   spf_forecasts_ny$target_year <- target_aux[,2]
   spf_forecasts_ny$target_quarter <- target_aux[,1]
