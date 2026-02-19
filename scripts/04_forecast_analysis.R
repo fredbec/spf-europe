@@ -23,7 +23,6 @@ SPF_panel <- SPF_panel$SPF_panel_eval
 
 
 
-
 ### Quick plots
 
 ## Plot filtered values using current versus current and next year SPF forecasts
@@ -310,7 +309,64 @@ disagreement_summary
 
 
 
-### Economic Policy Uncertainty (EPU) Index
+####### Robustness
+
+##### Mean as consensus forecast
+SPF_mean <- readRDS(
+  here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_mean_full.rds")
+)
+SPF_mean <- SPF_mean$SPF_consensus
+
+# Out-of-sample RMSE of median versus mean
+RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                             DropPeriod = dropYears,
+                                             EvalPeriod = evalPeriod,
+                                             SPFalternative = SPF_mean$evaluation_data_ny)
+RMSE_quarterly$RMSE
+
+
+##### Alternative consensus as median over individual filtered forecasts
+new_h0 <- SPF_panel %>%
+  group_by(ref_period) %>%
+  summarise(
+    spf_h0 = median(spf_h0, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+SPF_alt <- SPF_cons %>%
+  select(-starts_with("spf_h")) %>%
+  left_join(
+    SPF_panel %>%
+      group_by(ref_period) %>%
+      summarise(
+        spf_h0 = median(spf_h0, na.rm = TRUE),
+        spf_h1 = median(spf_h1, na.rm = TRUE),
+        spf_h2 = median(spf_h2, na.rm = TRUE),
+        spf_h3 = median(spf_h3, na.rm = TRUE),
+        spf_h4 = median(spf_h4, na.rm = TRUE),
+        .groups = "drop"
+      ),
+    by = "ref_period"
+  )
+
+# Out-of-sample RMSE (virtually identical results, also for mean)
+RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                             DropPeriod = dropYears,
+                                             EvalPeriod = evalPeriod,
+                                             SPFalternative = SPF_alt)
+RMSE_quarterly$RMSE
+
+
+##### Forecasting performance over extended time period
+RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                             DropPeriod = cbind(2020,2020),
+                                             EvalPeriod = cbind(2002,2023))
+RMSE_quarterly$RMSE
+RMSE_quarterly$DM_stars
+
+
+
+####### Economic Policy Uncertainty (EPU) Index
 europe_pu <- read_excel("data/Europe_Policy_Uncertainty_Data.xlsx") %>%
   select(Year, Month, European_News_Index) %>%
   rename(EUP = European_News_Index) %>%

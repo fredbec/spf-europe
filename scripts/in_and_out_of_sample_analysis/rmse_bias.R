@@ -79,6 +79,7 @@ SPF_bias <- function(spf_data, EvalPeriod = cbind(2002, 2019), DropPeriod = NA) 
 #' @param EvalPeriod 2×1 numeric matrix with evaluation start/end years (default: 2002–2019).
 #' @param DropPeriod Optional matrix of year ranges to exclude.
 #' @param lagLength Optional lag length for Newey–West SEs (default: n^0.25).
+#' #' @param SPFalternative Optional data frame with alternative SPF forecasts (from `data_function_spf.R`).
 #'
 #' @return List with RMSE table, DM statistics, and DM significance stars.
 SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
@@ -86,7 +87,7 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
                                        DropPeriod = NA, lagLength = NA,
                                        SPFalternative = NULL) {
 
-  # Merge SPF and AR-banchmark models
+  # Merge SPF and AR-benchmark models
   evaluation_data <- spf_data %>%
     left_join(ar_benchmark_data$DAR_fc, by = "ref_period")
 
@@ -120,10 +121,38 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
     filter(target_year < (EvalPeriod[2]+1) & target_year > (EvalPeriod[1]-1))
 
   # Drop periods if specified
+  #if (any(!is.na(DropPeriod))) {
+  #  for (i in 1:dim(DropPeriod)[1]) {
+  #    evaluation_data <- evaluation_data %>%
+  #      filter(!(target_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
+  #  }
+  #}
   if (any(!is.na(DropPeriod))) {
-    for (i in 1:dim(DropPeriod)[1]) {
+    for (i in 1:nrow(DropPeriod)) {
+
+      start_year <- floor(DropPeriod[i,1])
+      end_year   <- floor(DropPeriod[i,2])
+
+      start_frac <- DropPeriod[i,1] %% 1
+      end_frac   <- DropPeriod[i,2] %% 1
+
+      # Map decimals to quarters
+      start_q <- ifelse(start_frac == 0, 0, ceiling(start_frac * 4))
+      end_q   <- ifelse(end_frac == 0, 0, ceiling(end_frac * 4))
+
       evaluation_data <- evaluation_data %>%
-        filter(!(target_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
+        filter(!(
+          # middle years
+          (target_year > start_year & target_year < end_year) |
+
+            # start year
+            (target_year == start_year &
+               (start_q == 0 | target_quarter > start_q)) |
+
+            # end year
+            (target_year == end_year &
+               (end_q == 0 | target_quarter <= end_q))
+        ))
     }
   }
 
