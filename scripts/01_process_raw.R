@@ -304,8 +304,50 @@ process_spf <- function() {
                           "ens_fc")) |>
     unique()
 
+
+  #compute median quarterly forecasts
+  spfdat_qu_median <- alldata |>
+    copy() |>
+    DT(type_target == "quarterly" & type_format == "POINT") |>
+    DT(, fc_inst := forecast_year + 0.25*(forecast_quarter-1)) |>
+    DT(, tg_inst := target_year + 0.25*(target_quarter-1)) |>
+    DT(, horizon := tg_inst - fc_inst) |>
+    DT(horizon == 0.5) |>
+    DT(!is.na(prediction)) |>
+    DT(, ens_fc := median(prediction), by = c("target_year",
+                                              "target_quarter",
+                                              "forecast_year",
+                                              "forecast_quarter")) |>
+    DT(, .SD, .SDcols = c("target_year",
+                          "target_quarter",
+                          "forecast_year",
+                          "forecast_quarter",
+                          "ens_fc")) |>
+    unique()
+
+  spfdat_qu_mean <- alldata |>
+    copy() |>
+    DT(type_target == "quarterly" & type_format == "POINT") |>
+    DT(, fc_inst := forecast_year + 0.25*(forecast_quarter-1)) |>
+    DT(, tg_inst := target_year + 0.25*(target_quarter-1)) |>
+    DT(, horizon := tg_inst - fc_inst) |>
+    DT(horizon == 0.5) |>
+    DT(!is.na(prediction)) |>
+    DT(, ens_fc := mean(prediction), by = c("target_year",
+                                              "target_quarter",
+                                              "forecast_year",
+                                              "forecast_quarter")) |>
+    DT(, .SD, .SDcols = c("target_year",
+                          "target_quarter",
+                          "forecast_year",
+                          "forecast_quarter",
+                          "ens_fc")) |>
+    unique()
+
   data.table::fwrite(spfdat_median, here("data", "processed", "spf_median_forecast.csv"))
   data.table::fwrite(spfdat_mean, here("data", "processed", "spf_mean_forecast.csv"))
+  data.table::fwrite(spfdat_qu_median, here("data", "processed", "spf_median_quarterly_forecast.csv"))
+  data.table::fwrite(spfdat_qu_mean, here("data", "processed", "spf_mean_quarterly_forecast.csv"))
 }
 
 process_spf()
