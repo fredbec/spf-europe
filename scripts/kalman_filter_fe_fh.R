@@ -119,7 +119,7 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
       xvar <- x_var_fc - K %*%t (y_cov_fc_adj)           # (A7)
 
       # Log-likelihood contribution
-      LL[t] = - 0.5 * ( sum(ind_nan)*log(2*pi) + log(det(matrix(y_var_fc_adj)))
+      LL[t] = - 0.5 * ( sum(ind_nan)*log(2*pi) + log(det(y_var_fc_adj))
                         + t(v_t_adj) %*% chol2inv(chol(y_var_fc_adj)) %*% v_t_adj)
 
     } else {
@@ -348,7 +348,7 @@ SPF_filter_fe_fh <- function(rgdp, spf, spfFixHor, QuarterID, approx_err = 0.01)
                   upper = Inf)
 
   # Given the estimate 'est_sd', filter and smooth states, i.e., implied SPF
-  filtered_states <- kalman_filter_fe_fh(y, rw_sd = est_sd$par, approx_err = approx_err, smooth = TRUE)
+  filtered_states <- kalman_filter_fe_fh(y, rw_sd = est_sd$par, quarterID = QuarterID, approx_err = approx_err, smooth = TRUE)
   SPF <- as.matrix(kalman_smoother(filtered_states)[,1])
 
   # Define output of this function
