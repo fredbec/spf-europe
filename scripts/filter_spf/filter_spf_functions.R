@@ -233,17 +233,14 @@ filter_dat <- function(current_quarter,
         DT(forecast_year == current_year & forecast_quarter == current_quarter)
 
       fixedhorizon_fc <- fixedhorizon_fc$ens_fc
-      print(fixedhorizon_fc)
 
       quarterID <- ((current_quarter + 2 - 1) %% 4) + 1
-      message("here")
       cyres <- SPF_filter_fe_fh(rgdp = data_filter_cy$rgdp_growth,
                                 spf = data_filter_cy$spf_fc,
                                 spfFixHor = fixedhorizon_fc,
                                 QuarterID = quarterID,
                                 approx_err = approx_err)
       spf_filter_vals_cy <- cyres$SPF_filtered
-      message("here")
       cyandnyres <- SPF_filter_fe_fh(rgdp = data_filter_cyandny$rgdp_growth,
                                      spf = data_filter_cyandny$spf_fc,
                                      spfFixHor = fixedhorizon_fc,
