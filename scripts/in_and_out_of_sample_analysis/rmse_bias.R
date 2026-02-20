@@ -79,13 +79,15 @@ SPF_bias <- function(spf_data, EvalPeriod = cbind(2002, 2019), DropPeriod = NA) 
 #' @param EvalPeriod 2×1 numeric matrix with evaluation start/end years (default: 2002–2019).
 #' @param DropPeriod Optional matrix of year ranges to exclude.
 #' @param lagLength Optional lag length for Newey–West SEs (default: n^0.25).
+#' #' @param SPFalternative Optional data frame with alternative SPF forecasts (from `data_function_spf.R`).
 #'
 #' @return List with RMSE table, DM statistics, and DM significance stars.
 SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
                                        EvalPeriod = cbind(2002, 2019),
-                                       DropPeriod = NA, lagLength = NA) {
+                                       DropPeriod = NA, lagLength = NA,
+                                       SPFalternative = NULL) {
 
-  # Merge SPF and AR-banchmark models
+  # Merge SPF and AR-benchmark models
   evaluation_data <- spf_data %>%
     left_join(ar_benchmark_data$DAR_fc, by = "ref_period")
 
@@ -98,6 +100,18 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
   evaluation_data <- evaluation_data %>%
     left_join(ar_benchmark_data$NoChange_fc, by = "ref_period")
 
+  # If alternative SPF forecasts for comparison
+  if (!is.null(SPFalternative)) {
+    # Select only the SPF columns to merge and rename them
+    alt_cols <- SPFalternative %>%
+      select(ref_period, spf_h0:spf_h4) %>%
+      rename_with(~paste0("alt_", .), spf_h0:spf_h4)
+
+    # Join the renamed columns
+    evaluation_data <- evaluation_data %>%
+      left_join(alt_cols, by = "ref_period")
+  }
+
   # Drop missings
   evaluation_data <- evaluation_data %>%
     filter(!(is.na(spf_h0) | is.na(spf_h4)))
@@ -107,10 +121,38 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
     filter(target_year < (EvalPeriod[2]+1) & target_year > (EvalPeriod[1]-1))
 
   # Drop periods if specified
+  #if (any(!is.na(DropPeriod))) {
+  #  for (i in 1:dim(DropPeriod)[1]) {
+  #    evaluation_data <- evaluation_data %>%
+  #      filter(!(target_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
+  #  }
+  #}
   if (any(!is.na(DropPeriod))) {
-    for (i in 1:dim(DropPeriod)[1]) {
+    for (i in 1:nrow(DropPeriod)) {
+
+      start_year <- floor(DropPeriod[i,1])
+      end_year   <- floor(DropPeriod[i,2])
+
+      start_frac <- DropPeriod[i,1] %% 1
+      end_frac   <- DropPeriod[i,2] %% 1
+
+      # Map decimals to quarters
+      start_q <- ifelse(start_frac == 0, 0, ceiling(start_frac * 4))
+      end_q   <- ifelse(end_frac == 0, 0, ceiling(end_frac * 4))
+
       evaluation_data <- evaluation_data %>%
-        filter(!(target_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
+        filter(!(
+          # middle years
+          (target_year > start_year & target_year < end_year) |
+
+            # start year
+            (target_year == start_year &
+               (start_q == 0 | target_quarter > start_q)) |
+
+            # end year
+            (target_year == end_year &
+               (end_q == 0 | target_quarter <= end_q))
+        ))
     }
   }
 
@@ -132,6 +174,9 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
     iar_sq_error       <- (actual - evaluation_data[[paste0("IAR_h", h)]])^2
     RWmean_sq_error    <- (actual - evaluation_data[[paste0("RWmean_h", h)]])^2
     NoChange_sq_error  <- (actual - evaluation_data[[paste0("NoChange_h", h)]])^2
+    if (!is.null(SPFalternative)) {
+      spf_alt_sq_error <- (actual - evaluation_data[[paste0("alt_spf_h", h)]])^2
+    }
 
     # Compute RMSE
     spf_mse       <- mean(spf_sq_error)
@@ -140,16 +185,34 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
     IAR_mse       <- mean(iar_sq_error)
     RW_mean_mse   <- mean(RWmean_sq_error)
     NoChange_mse  <- mean(NoChange_sq_error)
+    if (!is.null(SPFalternative)) {
+      spf_alt_mse <- mean(spf_alt_sq_error)
+    }
 
-    tibble(
-      horizon = h,
-      spf_rmse       = sqrt(spf_mse),
-      DAR_rmse       = sqrt(DAR_mse),
-      IAR_rmse       = sqrt(IAR_mse),
-      RW_rmse        = sqrt(RW_mean_mse),
-      NoChange_rmse  = sqrt(NoChange_mse),
-      hist_mean_rmse = sqrt(hist_mean_mse)
-    )
+    if (is.null(SPFalternative)) {
+      tibble(
+        horizon = h,
+        spf_rmse       = sqrt(spf_mse),
+        DAR_rmse       = sqrt(DAR_mse),
+        IAR_rmse       = sqrt(IAR_mse),
+        RW_rmse        = sqrt(RW_mean_mse),
+        NoChange_rmse  = sqrt(NoChange_mse),
+        hist_mean_rmse = sqrt(hist_mean_mse)
+      )
+
+    } else {
+      tibble(
+        horizon = h,
+        spf_rmse       = sqrt(spf_mse),
+        DAR_rmse       = sqrt(DAR_mse),
+        IAR_rmse       = sqrt(IAR_mse),
+        RW_rmse        = sqrt(RW_mean_mse),
+        NoChange_rmse  = sqrt(NoChange_mse),
+        hist_mean_rmse = sqrt(hist_mean_mse),
+        spf_alt_rmse   = sqrt(spf_alt_mse)
+      )
+    }
+
 
   })
 
@@ -167,6 +230,9 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
     iar_sq_error       <- (actual - evaluation_data[[paste0("IAR_h", h)]])^2
     RWmean_sq_error    <- (actual - evaluation_data[[paste0("RWmean_h", h)]])^2
     NoChange_sq_error  <- (actual - evaluation_data[[paste0("NoChange_h", h)]])^2
+    if (!is.null(SPFalternative)) {
+      spf_alt_sq_error <- (actual - evaluation_data[[paste0("alt_spf_h", h)]])^2
+    }
 
     # Run DM Tests of competitor models versus SPF
     Loss_spf_hist_mean <- benchmark_sq_error - spf_sq_error
@@ -174,6 +240,9 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
     Loss_spf_iar       <- iar_sq_error - spf_sq_error
     Loss_spf_RWmean    <- RWmean_sq_error - spf_sq_error
     Loss_spf_NoChange  <- NoChange_sq_error - spf_sq_error
+    if (!is.null(SPFalternative)) {
+      Loss_spf_spf_alt <- spf_alt_sq_error - spf_sq_error
+    }
 
     # Lag length for HAC standard errors
     if (is.na(lagLength)) {
@@ -202,14 +271,34 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
     nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
     dm_test_nochange <- coef(dm_test) / sqrt(nw_var)
 
-    tibble(
-      horizon = h,
-      spf_DAR = dm_test_dar,
-      spf_IAR = dm_test_iar,
-      SPF_RW_mean = dm_test_rwmean,
-      spf_NoChange = dm_test_nochange,
-      spf_hist_mean = dm_test_hist_mean
-    )
+    if (!is.null(SPFalternative)) {
+      dm_test <- lm(Loss_spf_spf_alt ~ 1)
+      nw_var  <- NeweyWest(dm_test, lag = lags, prewhite = FALSE)
+      dm_test_spf_alt <- coef(dm_test) / sqrt(nw_var)
+    }
+
+    if (is.null(SPFalternative)) {
+      tibble(
+        horizon = h,
+        spf_DAR = dm_test_dar,
+        spf_IAR = dm_test_iar,
+        SPF_RW_mean = dm_test_rwmean,
+        spf_NoChange = dm_test_nochange,
+        spf_hist_mean = dm_test_hist_mean
+      )
+
+    } else {
+      tibble(
+        horizon = h,
+        spf_DAR = dm_test_dar,
+        spf_IAR = dm_test_iar,
+        SPF_RW_mean = dm_test_rwmean,
+        spf_NoChange = dm_test_nochange,
+        spf_hist_mean = dm_test_hist_mean,
+        spf_spf_alt = dm_test_spf_alt,
+      )
+    }
+
 
   })
 

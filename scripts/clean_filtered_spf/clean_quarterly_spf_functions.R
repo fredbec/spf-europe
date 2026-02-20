@@ -1,5 +1,5 @@
 ### Main function to clean consensus and individual forecasts
-data_function_spf <- function(ConsensusMedian = TRUE, SPFPanel = FALSE) {
+data_function_spf <- function(ConsensusMedian = TRUE, SPFPanel = FALSE, FixedHorizon = FALSE) {
 
 
   ### Read in and clean real GDP
@@ -23,9 +23,15 @@ data_function_spf <- function(ConsensusMedian = TRUE, SPFPanel = FALSE) {
 
   ### Read in and clean consensus or panelists forecasts
   if (SPFPanel) {
-    # Panel of SPF forecasters
-    IndivSPFall <- read.csv("output/filter_spf/individual/001_run.csv")
 
+    # Panel of SPF forecasters
+    if (FixedHorizon) {
+      # Filter using fixed-event and fixed-horizon forecasts
+      IndivSPFall <- read.csv("output/filter_spf/individual/001_run.csv")
+    } else {
+      # Filter using fixed-event forecasts
+      IndivSPFall <- read.csv("output/filter_spf/individual/001_run.csv")
+    }
 
     # Loop over forecast IDs and construct a panel
     ForecastIDs <- unique(IndivSPFall$forecaster_id)
@@ -62,12 +68,25 @@ data_function_spf <- function(ConsensusMedian = TRUE, SPFPanel = FALSE) {
   } else {
 
     if (ConsensusMedian) {
-      # Median forecasts SPF as consensus
-      spf_data <- read.csv("output/filter_spf/consensus_median/001_run.csv")
+      # Median forecasts as SPF consensus
+      if (FixedHorizon) {
+        # Filter using fixed-event and fixed-horizon forecasts
+        spf_data <- read.csv("output/filter_spf/consensus_median/001_run.csv")
+      } else {
+        # Filter using fixed-event forecasts
+        spf_data <- read.csv("output/filter_spf/consensus_median/001_run.csv")
+      }
+
 
     } else {
       # Mean forecasts as SPF consensus
-      spf_data <- read.csv("output/filter_spf/consensus_mean/001_run.csv")
+      if (FixedHorizon) {
+        # Filter using fixed-event and fixed-horizon forecasts
+        spf_data <- read.csv("output/filter_spf/consensus_mean/001_run.csv")
+      } else {
+        # Filter using fixed-event forecasts
+        spf_data <- read.csv("output/filter_spf/consensus_mean/001_run.csv")
+      }
     }
 
     # Consensus forecasts
@@ -77,15 +96,21 @@ data_function_spf <- function(ConsensusMedian = TRUE, SPFPanel = FALSE) {
 
 
   # Define output
+  if (FixedHorizon) {
+    FilterInfo = "FixedEventFixedHorizon"
+  } else {
+    FilterInfo = "FixedEvent"
+  }
+
   if (SPFPanel) {
     # Panel of SPF forecasters
-    SPF <- list(SPF_panel = SPF_panel, SPF_panel_eval = SPF_panel_eval)
+    SPF <- list(SPF_panel = SPF_panel, SPF_panel_eval = SPF_panel_eval, FilterInfo)
   } else {
     # Consensus forecasts
     if (ConsensusMedian) {
-      SPF <- list(SPF_consensus = SPF, Consensus = 'median')
+      SPF <- list(SPF_consensus = SPF, Consensus = 'median', FilterInfo = FilterInfo)
     } else {
-      SPF <- list(SPF_consensus = SPF, Consensus = 'mean')
+      SPF <- list(SPF_consensus = SPF, Consensus = 'mean', FilterInfo = FilterInfo)
     }
   }
 
@@ -172,12 +197,27 @@ data_function_spf <- function(ConsensusMedian = TRUE, SPFPanel = FALSE) {
     mutate(ref_period = as.yearqtr(paste(target_year, target_quarter), format = "%Y %q")) %>%
     select(-target_year, -target_quarter)
 
-  evaluation_data_cy <- rgdp_rel %>%
-    left_join(spf_forecasts_cy, by = "ref_period") # %>%
-  # filter(ref_period >= as.yearqtr("2002 Q1", format = "%Y Q%q"))
+  evaluation_data_cy <- full_join(
+    spf_forecasts_cy,
+    rgdp_rel %>%
+      distinct(ref_period, .keep_all = TRUE),  # keep all GDP vars
+    by = "ref_period"
+  ) %>%
+    arrange(ref_period)
 
-  evaluation_data_ny <- rgdp_rel %>%
-    left_join(spf_forecasts_ny, by = "ref_period")
+
+  evaluation_data_ny <- full_join(
+    spf_forecasts_ny,
+    rgdp_rel %>%
+      distinct(ref_period, .keep_all = TRUE),  # keep all GDP vars
+    by = "ref_period"
+  ) %>%
+    arrange(ref_period)
+
+
+
+  #evaluation_data_ny <- rgdp_rel %>%
+  #  left_join(spf_forecasts_ny, by = "ref_period")
 
   spf_forecasts_ny$target_year <- target_aux[,2]
   spf_forecasts_ny$target_quarter <- target_aux[,1]

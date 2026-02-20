@@ -5,6 +5,7 @@ library(dplyr)      # For data manipulation: filtering, mutating, grouping, etc.
 library(zoo)        # Provides 'yearqtr' and 'yearmon' classes
 library(tidyr)      # For reshaping data
 library(ggplot2)    # For plotting
+library(readxl)     # For reading in .xlsx files
 
 library(here)
 
@@ -116,6 +117,7 @@ for(i in 0:4){
   dev.off()
 
 }
+
 
 
 ### Some information on the panel of forecasters
@@ -267,12 +269,165 @@ RMSE_quarterly$DM_stars # significance levels
 
 
 
+###### Disagreement among panelists
+disagreement <- SPF_panel %>%
+  group_by(ref_period) %>%
+  summarise(
+    IQR_h0 = IQR(spf_h0, na.rm = TRUE),
+    IQR_h1 = IQR(spf_h1, na.rm = TRUE),
+    IQR_h2 = IQR(spf_h2, na.rm = TRUE),
+    IQR_h3 = IQR(spf_h3, na.rm = TRUE),
+    IQR_h4 = IQR(spf_h4, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(ref_period) %>%
+  mutate(
+    IQR_h1 = lead(IQR_h1, 1),
+    IQR_h2 = lead(IQR_h2, 2),
+    IQR_h3 = lead(IQR_h3, 3),
+    IQR_h4 = lead(IQR_h4, 4)
+  ) %>%
+  filter(!is.na(IQR_h0))
+
+
+# Summary statistics
+disagreement_summary <- sapply(
+  disagreement %>% select(starts_with("IQR")),
+  function(x) {
+    c(
+      N      = sum(!is.na(x)),
+      min    = min(x, na.rm = TRUE),
+      mean   = mean(x, na.rm = TRUE),
+      max    = max(x, na.rm = TRUE)
+    )
+  }
+)
+
+disagreement_summary <- round(t(disagreement_summary), decimals)
+disagreement_summary
 
 
 
 
+####### Robustness
+
+##### Mean as consensus forecast
+SPF_mean <- readRDS(
+  here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_mean_full.rds")
+)
+SPF_mean <- SPF_mean$SPF_consensus
+
+# Out-of-sample RMSE of median versus mean
+RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                             DropPeriod = dropYears,
+                                             EvalPeriod = evalPeriod,
+                                             SPFalternative = SPF_mean$evaluation_data_ny)
+RMSE_quarterly$RMSE
 
 
+##### Alternative consensus as median over individual filtered forecasts
+new_h0 <- SPF_panel %>%
+  group_by(ref_period) %>%
+  summarise(
+    spf_h0 = median(spf_h0, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+SPF_alt <- SPF_cons %>%
+  select(-starts_with("spf_h")) %>%
+  left_join(
+    SPF_panel %>%
+      group_by(ref_period) %>%
+      summarise(
+        spf_h0 = median(spf_h0, na.rm = TRUE),
+        spf_h1 = median(spf_h1, na.rm = TRUE),
+        spf_h2 = median(spf_h2, na.rm = TRUE),
+        spf_h3 = median(spf_h3, na.rm = TRUE),
+        spf_h4 = median(spf_h4, na.rm = TRUE),
+        .groups = "drop"
+      ),
+    by = "ref_period"
+  )
+
+# Out-of-sample RMSE (virtually identical results, also for mean)
+RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                             DropPeriod = dropYears,
+                                             EvalPeriod = evalPeriod,
+                                             SPFalternative = SPF_alt)
+RMSE_quarterly$RMSE
+
+
+##### Forecasting performance over extended time period
+RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                             DropPeriod = cbind(2020,2020),
+                                             EvalPeriod = cbind(2002,2023))
+RMSE_quarterly$RMSE
+RMSE_quarterly$DM_stars
+
+
+
+####### Economic Policy Uncertainty (EPU) Index
+europe_pu <- read_excel("data/Europe_Policy_Uncertainty_Data.xlsx") %>%
+  select(Year, Month, European_News_Index) %>%
+  rename(EUP = European_News_Index) %>%
+  filter(!is.na(EUP))
+
+
+# Average monthly observations to quarterly frequency
+europe_pu <- europe_pu %>%
+  mutate(
+    # Convert Year + Month to a date and then to yearqtr
+    ref_period = as.yearqtr(paste(Year, Month, "1", sep = "-"), format = "%Y-%m-%d")
+  ) %>%
+  group_by(ref_period) %>%
+  summarise(
+    EUP = mean(EUP, na.rm = TRUE),  # average over months in the quarter
+    .groups = "drop"
+  ) %>%
+  arrange(ref_period)
+
+
+# Merge EPU with disagreement
+disagreement <- disagreement %>%
+  left_join(
+    europe_pu %>% select(ref_period, EUP),
+    by = "ref_period"
+  )
+
+
+# Reshape to long format
+disagreement_long <- disagreement %>%
+  pivot_longer(
+    cols = starts_with("IQR"),
+    names_to = "horizon",
+    values_to = "IQR"
+  )
+
+
+# Time series plot
+ggplot(disagreement_long, aes(x = ref_period, y = IQR, color = horizon)) +
+  geom_line(size = 1) +
+  labs(
+    x = "Quarter",
+    y = "Interquartile Range of SPF forecasts",
+    color = "Horizon"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+
+#### Store data to produce Matlab plots
+MatlabPlots <- SPF$evaluation_data_ny %>%
+  left_join(disagreement, by = "ref_period") %>%
+  arrange(ref_period)
+
+write.csv(
+  MatlabPlots,
+  file = here("matlab_plots", "SPF_plot_data.csv"),
+  row.names = FALSE
+)
 
 
 
