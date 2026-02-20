@@ -145,7 +145,7 @@ source(here("scripts", "in_and_out_of_sample_analysis", "ar_benchmark_yearly.R")
 
 # Quarterly GDP growth forecasts
 AR_bench_quarterly <- ar_benchmark_quarterly(SPF$rgdp_all, ar_length = 30,
-                                             rw_length = 4,
+                                             rw_length = 1000, # real-time historical mean
                                              max_lag = 4,
                                              SampleEnd = 2026,
                                              endMonth = 2)
@@ -165,8 +165,8 @@ source(here("scripts", "in_and_out_of_sample_analysis", "mz_reg.R"))
 source(here("scripts", "in_and_out_of_sample_analysis", "forecast_revision.R"))
 
 
-dropYears  <- NA # cbind(2009, 2009)
-evalPeriod <- cbind(2002,2019)
+dropYears  <- cbind(2020, 2021) # Drop pandemic
+evalPeriod <- cbind(2002, 2019)
 decimals <- 2
 
 ##### Consensus forecasts
@@ -177,30 +177,30 @@ SPF_annual <- SPF$spf_annual
 ### Bias, MZ-regression, forecast efficiency
 
 # Bias (Mean Error) of filtered quarterly SPF using current and next year projections
-SPF_ME <- SPF_bias(SPF_cons, DropPeriod = dropYears, EvalPeriod = evalPeriod)
+SPF_ME_median_cons <- SPF_bias(SPF_cons, DropPeriod = dropYears, EvalPeriod = evalPeriod)
 
 # Mincer-Zarnowitz regressions
-MZReg_cons <- MZReg(SPF_cons, EvalPeriod = evalPeriod, digits = decimals)
+MZReg_median_cons <- MZReg(SPF_cons, EvalPeriod = evalPeriod, digits = decimals)
 
 # Forecast errors on forecast revisions
-ErrorOnRev_cons <- ErrorsOnRevisionCons(SPF_cons, EvalPeriod = evalPeriod, digits = decimals)
+ErrorOnRev_median_cons <- ErrorsOnRevisionCons(SPF_cons, EvalPeriod = evalPeriod, digits = decimals)
 
 # Forecast revisions on revisions
-RevOnRev_cons <- RevisionsOnRevisionCons(SPF_cons, EvalPeriod = evalPeriod, digits = decimals)
+RevOnRev_median_cons <- RevisionsOnRevisionCons(SPF_cons, EvalPeriod = evalPeriod, digits = decimals)
 
 
 
 ### Out-of-sample forecast performance
 
 # Evaluation of quarterly filtered SPF against benchmark models
-RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
-                                             DropPeriod = dropYears,
-                                             EvalPeriod = evalPeriod)
+RMSE_quarterly_median_cons <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                                         DropPeriod = dropYears,
+                                                         EvalPeriod = evalPeriod)
 
 # Evaluation of yearly SPF against benchmark models
-RMSE_yearly <- SPF_RMSE_DM_Test_yearly(SPF_annual, AR_bench_yearly,
-                                       DropPeriod = dropYears,
-                                       EvalPeriod = evalPeriod)
+RMSE_yearly_median_cons <- SPF_RMSE_DM_Test_yearly(SPF_annual, AR_bench_yearly,
+                                                   DropPeriod = dropYears,
+                                                   EvalPeriod = evalPeriod)
 
 
 
@@ -217,52 +217,6 @@ ErrorOnRev_panel <- ErrorsOnRevisionPanel(SPF_panel, EvalPeriod = evalPeriod, di
 
 # Forecast revisions on revisions
 RevOnRev_panel <- RevisionsOnRevisionPanel(SPF_panel, EvalPeriod = evalPeriod, digits = decimals)
-
-
-
-
-
-######## Print the results
-
-##### Consensus
-
-### Bias (Mean forecast error)
-round(SPF_ME,decimals)
-
-### Mincer-Zarnowitz regressions
-print(MZReg_cons)
-
-### Errors-on-Revision regressions
-print(ErrorOnRev_cons)
-
-### Revisions-on-Revision regressions
-print(RevOnRev_cons)
-
-
-##### Panel
-
-### Bias (Mean forecast error)
-print(Bias_panel)
-
-### Mincer-Zarnowitz regressions
-print(MZReg_panel)
-
-### Errors-on-Revision regressions
-print(ErrorOnRev_panel)
-
-### Revisions-on-Revision regressions
-print(RevOnRev_panel)
-
-
-
-### Root Mean Squared Errors of quarterly SPF and DM-test results
-RMSE_quarterly$RMSE
-# round(RMSE_quarterly$DM_Test,2)
-RMSE_quarterly$DM_stars # significance levels
-
-### RMSE and DM test of yearly SPF forecasts (additional results probably not reported)
-# round(RMSE_yearly$RMSE_yearly,decimals)
-# RMSE_yearly$DM_stars_yearly
 
 
 
@@ -304,28 +258,27 @@ disagreement_summary <- sapply(
 )
 
 disagreement_summary <- round(t(disagreement_summary), decimals)
-disagreement_summary
+
 
 
 
 
 ####### Robustness
 
-##### Mean as consensus forecast
+### Mean as consensus forecast
 SPF_mean <- readRDS(
   here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_mean_full.rds")
 )
 SPF_mean <- SPF_mean$SPF_consensus
 
 # Out-of-sample RMSE of median versus mean
-RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
-                                             DropPeriod = dropYears,
-                                             EvalPeriod = evalPeriod,
-                                             SPFalternative = SPF_mean$evaluation_data_ny)
-RMSE_quarterly$RMSE
+RMSE_quarterly_mean_cons <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                                       DropPeriod = dropYears,
+                                                       EvalPeriod = evalPeriod,
+                                                       SPFalternative = SPF_mean$evaluation_data_ny)
 
 
-##### Alternative consensus as median over individual filtered forecasts
+### Alternative consensus as median over individual filtered forecasts
 new_h0 <- SPF_panel %>%
   group_by(ref_period) %>%
   summarise(
@@ -350,23 +303,31 @@ SPF_alt <- SPF_cons %>%
   )
 
 # Out-of-sample RMSE (virtually identical results, also for mean)
-RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
-                                             DropPeriod = dropYears,
-                                             EvalPeriod = evalPeriod,
-                                             SPFalternative = SPF_alt)
-RMSE_quarterly$RMSE
+RMSE_quarterly_panel_median_cons <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                                               DropPeriod = dropYears,
+                                                               EvalPeriod = evalPeriod,
+                                                               SPFalternative = SPF_alt)
 
 
-##### Forecasting performance over extended time period
-RMSE_quarterly <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
-                                             DropPeriod = cbind(2020,2020),
-                                             EvalPeriod = cbind(2002,2023))
-RMSE_quarterly$RMSE
-RMSE_quarterly$DM_stars
+### Forecasting performance over extended time period
+evalPeriod <- cbind(2002,2023)
+
+# Bias
+SPF_ME_median_cons_full_period <- SPF_bias(SPF_cons, DropPeriod = dropYears, EvalPeriod = evalPeriod)
+
+# RMSE
+RMSE_quarterly_median_cons_full_period <- SPF_RMSE_DM_Test_quarterly(SPF_cons,
+                                                                     AR_bench_quarterly,
+                                                                     DropPeriod = dropYears,
+                                                                     EvalPeriod = evalPeriod)
 
 
 
-####### Economic Policy Uncertainty (EPU) Index
+
+####### Data to produce Matlab plots
+
+
+# Economic Policy Uncertainty (EPU) Index (not used so far)
 europe_pu <- read_excel("data/Europe_Policy_Uncertainty_Data.xlsx") %>%
   select(Year, Month, European_News_Index) %>%
   rename(EUP = European_News_Index) %>%
@@ -428,6 +389,76 @@ write.csv(
   file = here("matlab_plots", "SPF_plot_data.csv"),
   row.names = FALSE
 )
+
+
+
+
+
+
+######## Print the results
+
+##### Median consensus
+
+### Bias (Mean forecast error)
+round(SPF_ME_median_cons,decimals)
+round(SPF_ME_median_cons_full_period,decimals)
+
+### Mincer-Zarnowitz regressions
+print(MZReg_median_cons)
+
+### Errors-on-Revision regressions
+print(ErrorOnRev_median_cons)
+
+### Revisions-on-Revision regressions
+print(RevOnRev_median_cons)
+
+
+### Root Mean Squared Errors of quarterly SPF and DM-test results
+RMSE_quarterly_median_cons$RMSE
+RMSE_quarterly_median_cons$DM_stars # significance levels
+
+RMSE_quarterly_median_cons_full_period$RMSE
+RMSE_quarterly_median_cons_full_period$DM_stars
+
+
+### RMSE and DM test of yearly SPF forecasts (additional results probably not reported)
+# round(RMSE_yearly_median_cons$RMSE_yearly,decimals)
+# RMSE_yearly_median_cons$DM_stars_yearly
+
+
+
+
+
+##### Panel
+
+# Survey respondents over time
+summary(panel_size_ts_trimmed$n_panelists)
+
+# summary Disagreement
+disagreement_summary
+
+### Bias (Mean forecast error)
+print(Bias_panel)
+
+### Mincer-Zarnowitz regressions
+print(MZReg_panel)
+
+### Errors-on-Revision regressions
+print(ErrorOnRev_panel)
+
+### Revisions-on-Revision regressions
+print(RevOnRev_panel)
+
+
+
+##### Robustness
+
+# Root Mean Squared Errors of median versus mean consensus
+RMSE_quarterly_mean_cons$RMSE # spf_alt_rmse is mean consensus
+
+# Root Mean Squared Errors of median over individual filtered forecasts (spf_alt_rmse)
+RMSE_quarterly_panel_median_cons$RMSE
+
 
 
 
