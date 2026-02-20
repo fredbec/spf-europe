@@ -412,14 +412,59 @@ run_filter_from_settings <- function(settings){
     )
   } else {
 
-    SPF_data <- SPF_data |>
-      DT(type_format == "POINT") |>
-      DT(type_target == "annual") |>
-      DT(forecast_year >= 2001) |>
-      setnames("prediction", "ens_fc") #for compatibility
+    if(grepl("fixedhorizon", settings$spec_id)){
+
+      SPF_data <- SPF_data |>
+        DT(type_format == "POINT") |>
+        DT(forecast_year >= 2001) |>
+        setnames("prediction", "ens_fc") |>
+        DT(, horizon := target_year - forecast_year) |>
+        DT(horizon <= 1) |>
+        DT(, horizon := NULL) |>
+        DT(, fc_inst := forecast_year + 0.25*(forecast_quarter-1)) |>
+        DT(, tg_inst := target_year + 0.25*(target_quarter-1)) |>
+        DT(type_target == "quarterly", horizon := tg_inst - fc_inst) |>
+        DT(is.na(horizon) | horizon == 0.5) |>
+        DT(, count := .N, by = c("forecast_year", "forecast_quarter", "forecaster_id")) |>
+        DT(count == 3) #only keep instances with all 3 forecast (annual c, annual n, quarterly)
+
+      SPF_fixedhorizon <- SPF_data |>
+        DT(type_target == "quarterly") |>
+        DT(, .SD, .SDcols = c("forecaster_id",
+                              "target_year",
+                              "target_quarter",
+                              "forecast_year",
+                              "forecast_quarter",
+                              "ens_fc")) |>
+        split(by = "forecaster_id")
+
+      SPF_data <- SPF_data |>
+        DT(type_target == "annual")|>
+        DT(, .SD, .SDcols = c("forecaster_id",
+                              "target_year",
+                              "forecast_year",
+                              "forecast_quarter",
+                              "ens_fc"))
+    } else{
+
+      SPF_data <- SPF_data |>
+        DT(type_format == "POINT") |>
+        DT(type_target == "annual") |>
+        DT(forecast_year >= 2001) |>
+        DT(, horizon := target_year - forecast_year) |>
+        DT(horizon <= 1) |>
+        DT(, horizon := NULL) |>
+        setnames("prediction", "ens_fc") |> #for compatibility
+        DT(, .SD, .SDcols = c("forecaster_id",
+                              "target_year",
+                              "forecast_year",
+                              "forecast_quarter",
+                              "ens_fc"))
+
+      SPF_fixedhorizon <- NULL
+    }
 
     SPF_data <- split(SPF_data, by = "forecaster_id")
-
 
     #get only combs for which forecaster id has submitted
     fcid_combs <- lapply(SPF_data, function(fcdat){
@@ -445,6 +490,7 @@ run_filter_from_settings <- function(settings){
           combs = fcid_combs[[as.character(fcid)]],
           SPF_data = spf_dat_indiv,
           real_time_data = real_time_data,
+          SPF_fixedhorizon = SPF_fixedhorizon[[as.character(fcid)]],
           SPF_data_US = SPF_data_US,
           release_US_SPF = settings$release_US_SPF,
           est_gamma = settings$gamma_est,
