@@ -197,7 +197,7 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
 #' smoothed_states <- kalman_smoother(states)
 #'
 #' @export
-kalman_smoother = function(states_filtered) {
+kalman_smoother_fe_fh = function(states_filtered) {
 
   ###### State space representation
 
@@ -349,7 +349,7 @@ SPF_filter_fe_fh <- function(rgdp, spf, spfFixHor, QuarterID, approx_err = 0.01)
 
   # Given the estimate 'est_sd', filter and smooth states, i.e., implied SPF
   filtered_states <- kalman_filter_fe_fh(y, rw_sd = est_sd$par, quarterID = QuarterID, approx_err = approx_err, smooth = TRUE)
-  SPF <- as.matrix(kalman_smoother(filtered_states)[,1])
+  SPF <- as.matrix(kalman_smoother_fe_fh(filtered_states)[,1])
 
   # Define output of this function
   colnames(SPF) <- "SPF_implied"
