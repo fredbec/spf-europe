@@ -1,6 +1,7 @@
 source(here("scripts", "kalman_filter.R"))
 source(here("scripts", "kalman_filter_us.R"))
 source(here("scripts", "kalman_filter_us_gamma.R"))
+source(here("scripts", "kalman_filter_fe_fh.R"))
 
 get_rtd <- function(real_time_data,
                     current_issue,
@@ -84,6 +85,7 @@ filter_dat <- function(current_quarter,
                        current_year,
                        SPF_data,
                        real_time_data,
+                       SPF_fixedhorizon,
                        SPF_data_US = NULL,
                        release_US_SPF = "latest",
                        est_gamma = FALSE,
@@ -226,10 +228,35 @@ filter_dat <- function(current_quarter,
       }
     }
 
-    cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, approx_err = approx_err)
-    spf_filter_vals_cy <- cyres$SPF_filtered
-    cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, approx_err = approx_err)
-    spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+    if(!is.null(SPF_fixedhorizon)){
+      fixedhorizon_fc <- SPF_fixedhorizon |>
+        DT(forecast_year == current_year & forecast_quarter == current_quarter)
+
+      fixedhorizon_fc <- fixedhorizon_fc$ens_fc
+      print(fixedhorizon_fc)
+
+      quarterID <- ((current_quarter + 2 - 1) %% 4) + 1
+      message("here")
+      cyres <- SPF_filter_fe_fh(rgdp = data_filter_cy$rgdp_growth,
+                                spf = data_filter_cy$spf_fc,
+                                spfFixHor = fixedhorizon_fc,
+                                QuarterID = quarterID,
+                                approx_err = approx_err)
+      spf_filter_vals_cy <- cyres$SPF_filtered
+      message("here")
+      cyandnyres <- SPF_filter_fe_fh(rgdp = data_filter_cyandny$rgdp_growth,
+                                     spf = data_filter_cyandny$spf_fc,
+                                     spfFixHor = fixedhorizon_fc,
+                                     QuarterID = quarterID,
+                                     approx_err = approx_err)
+      spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+
+    } else {
+      cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, approx_err = approx_err)
+      spf_filter_vals_cy <- cyres$SPF_filtered
+      cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, approx_err = approx_err)
+      spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+    }
   } else {
     #following code is a bit adhoc, since there was an error in the instance 2018Q1
     #with the Cholesky decomposition
@@ -288,6 +315,7 @@ filter_dat <- function(current_quarter,
 run_filter <- function(combs,
                        SPF_data,
                        real_time_data,
+                       SPF_fixedhorizon,
                        SPF_data_US,
                        release_US_SPF = "latest",
                        est_gamma,
@@ -311,6 +339,7 @@ run_filter <- function(combs,
                       current_year = cyr,
                       SPF_data = SPF_data,
                       real_time_data = real_time_data,
+                      SPF_fixedhorizon = SPF_fixedhorizon,
                       SPF_data_US = SPF_data_US,
                       release_US_SPF = release_US_SPF,
                       est_gamma = est_gamma,
@@ -343,10 +372,16 @@ run_filter_from_settings <- function(settings){
   SPF_data <- data.table::fread(here("data", "processed", settings$data_input_primary))
 
   if(!is.null(settings$data_input_secondary)){
-
-    SPF_data_US <- data.table::fread(here("data", "processed", settings$data_input_secondary))
+    if(grepl("fixedhorizon", settings$spec_id)){
+      SPF_fixedhorizon <- data.table::fread(here("data", "processed", settings$data_input_secondary))
+      SPF_data_US <- NULL
+    } else {
+      SPF_data_US <- data.table::fread(here("data", "processed", settings$data_input_secondary))
+      SPF_fixedhorizon <- NULL
+    }
   } else {
     SPF_data_US <- NULL
+    SPF_fixedhorizon <- NULL
   }
 
   real_time_data <- fread(here("data", "processed", "revdatfull.csv")) |>
@@ -369,6 +404,7 @@ run_filter_from_settings <- function(settings){
       combs = combs,
       SPF_data = SPF_data,
       real_time_data = real_time_data,
+      SPF_fixedhorizon = SPF_fixedhorizon,
       SPF_data_US = SPF_data_US,
       release_US_SPF = settings$release_US_SPF,
       est_gamma = settings$gamma_est,
