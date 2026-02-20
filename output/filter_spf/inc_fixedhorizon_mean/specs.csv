@@ -1,0 +1,5 @@
+key,value
+spec_id,inc_fixedhorizon_mean
+data_input_primary,"spf_mean_forecast.csv"
+data_input_secondary,"spf_mean_quarterly_forecast.csv"
+ensemble_stat,median
