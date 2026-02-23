@@ -25,8 +25,8 @@ greytranspar = 0.4;
 % set(0,'defaultTextInterpreter','latex')
 
 % CEPR recession periods (year, quarter)
-recession_start = datetime([2008 2011 2020],[1 7 1],1);  % year, month, day placeholder
-recession_end   = datetime([2009 2013 2020],[4 1 4],1);  % year, month, day placeholder
+recession_start = datetime([2008 2011 2019],[1 7 10],1);  % year, month, day placeholder
+recession_end   = datetime([2009 2013 2020],[4 1 4],1);   % year, month, day placeholder
 recession_start = dateshift(recession_start,'start','quarter');
 recession_end   = dateshift(recession_end,'start','quarter');
 
