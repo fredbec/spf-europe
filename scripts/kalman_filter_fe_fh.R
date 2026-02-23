@@ -1,4 +1,4 @@
-#' Kalman Filter for Quarterly SPF Forecasts using fixed-evend and horizons forecasts
+#' Kalman Filter for Quarterly SPF Forecasts using fixed-event and horizon forecasts
 #'
 #' Computes the Kalman filter-based negative log-likelihood for a
 #' given random walk variance in a state-space model.
@@ -6,7 +6,8 @@
 #' @param y A Tx3 matrix of annualized SPF projections (column 1), observed
 #'   quarterly growth rates (column 2), and fixed-horizon forecasts (column 3).
 #' @param rw_sd Standard deviation of the random walk process.
-#' @param approx_err Standard deviation of the approximation error.
+#' @param approx_err Vector of standard deviations of the approximation error
+#'   and fixed-horizon measurement error.
 #' @param smooth Logical; if TRUE, outputs smoother variables.
 #'
 #' @return A list containing:
@@ -180,7 +181,7 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
 #'     \item{\code{v_t}}{ Prediction residuals.}
 #'     \item{\code{y_var_fc}}{ Covariance matrix for predicting \eqn{y_t}.}
 #'     \item{\code{nan_ind}}{ Indicator for missing observations.}
-#'     \item{\code{row3}}{ 3rd row of C matrix.}
+#'     \item{\code{row3}}{ 3rd row of the dynamic C matrix.}
 #'   }
 #'
 #' @return A matrix of smoothed state estimates, where each row corresponds
@@ -270,7 +271,8 @@ kalman_smoother_fe_fh = function(states_filtered) {
 #' @param rw_sd The random walk standard deviation (rw_sd) to optimize.
 #' @param y A Tx2 matrix of annualized SPF projections (column 1)
 #'   and observed quarterly growth rates (column 2).
-#' @param approx_err The fixed standard deviation of the approximation error.
+#' @param approx_err The fixed standard deviations of the approximation error
+#'   and the fixed-horizon forecast measurement error.
 #'
 #' @return The negative log-likelihood value (NegLL) for the given `rw_sd`.
 #'
@@ -297,6 +299,10 @@ log_likelihood_function_fe_fh <- function(rw_sd, y, quarterID, approx_err) {
 #'
 #' @param rgdp A numeric vector of observed quarterly real GDP growth rates.
 #' @param spf A numeric vector of SPF projections, annualized.
+#' @param spfFixHor A numeric scalar of SPF fixed-horizon forecast.
+#' @param QuarterID A numeric scalar for target quarter ofSPF fixed-horizon forecast.
+#' @param approx_err Vector of standard deviations of the approximation error
+#'   and fixed-horizon measurement error.
 #'
 #' @return A list with the following components:
 #' \describe{
