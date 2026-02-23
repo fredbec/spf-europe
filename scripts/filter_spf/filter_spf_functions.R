@@ -201,32 +201,44 @@ filter_dat <- function(current_quarter,
 
     # Calibration of approximation error to observed data (Code should be improved)
     if (is.null(approx_err)) {
-      test = cbind(data_filter_cy$rgdp_growth,data_filter_cy$rgdp_growth_ann)
+      GDP_check = cbind(data_filter_cy$rgdp_growth,data_filter_cy$rgdp_growth_ann)
 
-      if (all(is.na(test[,2]))) {
+      if (all(is.na(GDP_check[,2]))) {
         approx_err = 0.1
         print("Warning: No annual growth rates!")
       } else {
-        last_valid <- max(max(which(!is.na(test[,2]))), dim(test)[1])
-        test <- test[1:last_valid, ]
+        # Prepare actual GDP data for comparison
+        last_valid <- max(max(which(!is.na(GDP_check[,2]))), dim(GDP_check)[1])
+        GDP_check <- GDP_check[1:last_valid, ]
 
-        n <- nrow(test)
+        n <- nrow(GDP_check)
         rem <- n %% 4
 
         if (rem != 0) {
-          test <- test[(rem + 1):n, ]
+          GDP_check <- GDP_check[(rem + 1):n, ]
         }
 
-        test = cbind(test,NaN)
-        for (i in 8:dim(test)[1]) {
-          test[i,3] = 1/16 * (test[i,1] + 2*test[i-1,1] + 3*test[i-2,1] + 4*test[i-3,1] +
-                                + 3*test[i-4,1] +  + 2*test[i-5,1] + 2*test[i-6,1])
+        # Calibration of yearly aggregation error
+        GDP_check = cbind(GDP_check,NaN)
+        for (i in 8:dim(GDP_check)[1]) {
+          GDP_check[i,3] = 1/16 * (GDP_check[i,1] + 2*GDP_check[i-1,1] + 3*GDP_check[i-2,1] + 4*GDP_check[i-3,1] +
+                                + 3*GDP_check[i-4,1] +  + 2*GDP_check[i-5,1] + 2*GDP_check[i-6,1])
 
         }
-        ApprErr <- test[,2] - test[,3]
+        ApprErr <- GDP_check[,2] - GDP_check[,3]
         approx_err <- sd(ApprErr, na.rm = TRUE)
+
+        # Calibration of fixed-horizon aggregation error
+        GDP_check <- cbind(GDP_check,NaN)
+        g <- GDP_check[,1]
+        GDP_check[,4] <- (g + lag(g,1) + lag(g,2) + lag(g,3))/4
+        ApprErrFH <- GDP_check[,2] - GDP_check[,4]
+        approx_err_fh <- sd(ApprErrFH, na.rm = TRUE)
       }
-    }
+    } else {
+      # Could be an input to the function
+      approx_err_fh <- approx_err
+  }
 
     if(!is.null(SPF_fixedhorizon)){
       fixedhorizon_fc <- SPF_fixedhorizon |>
@@ -239,13 +251,13 @@ filter_dat <- function(current_quarter,
                                 spf = data_filter_cy$spf_fc,
                                 spfFixHor = fixedhorizon_fc,
                                 QuarterID = quarterID,
-                                approx_err = approx_err)
+                                approxerr = c(approx_err,approx_err_fh) )
       spf_filter_vals_cy <- cyres$SPF_filtered
       cyandnyres <- SPF_filter_fe_fh(rgdp = data_filter_cyandny$rgdp_growth,
                                      spf = data_filter_cyandny$spf_fc,
                                      spfFixHor = fixedhorizon_fc,
                                      QuarterID = quarterID,
-                                     approx_err = approx_err)
+                                     approxerr = c(approx_err,approx_err_fh) )
       spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
 
     } else {

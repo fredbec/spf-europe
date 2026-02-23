@@ -1,10 +1,10 @@
-#' Kalman Filter for Quarterly SPF Forecasts (Fix headers and comments!)
+#' Kalman Filter for Quarterly SPF Forecasts using fixed-evend and horizons forecasts
 #'
 #' Computes the Kalman filter-based negative log-likelihood for a
 #' given random walk variance in a state-space model.
 #'
-#' @param y A Tx2 matrix of annualized SPF projections (column 1)
-#'   and observed quarterly growth rates (column 2).
+#' @param y A Tx3 matrix of annualized SPF projections (column 1), observed
+#'   quarterly growth rates (column 2), and fixed-horizon forecasts (column 3).
 #' @param rw_sd Standard deviation of the random walk process.
 #' @param approx_err Standard deviation of the approximation error.
 #' @param smooth Logical; if TRUE, outputs smoother variables.
@@ -51,7 +51,7 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
   row3 <- rep(0, 7)
   start <- 4 - quarterID + 1
   row3[start:(start + 3)] <- 1
-
+  row3 <- row3 / 4
   C <- matrix(
     c(
       1/16, 2/16, 3/16, 4/16, 3/16, 2/16, 1/16,
@@ -62,7 +62,7 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
     byrow = TRUE
   )
 
-  D <- diag(c(approx_err, 0, 0.001)) # is 0.001 problematic ??????????
+  D <- diag(c(approx_err[1], 0, approx_err[2]))
 
   # Output required for Kalman smoother (smooth = TRUE)
   TT <- nrow(y)
@@ -81,8 +81,8 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
   LL <- rep(0, TT)
 
   # Initialize Kalman filter recursion and matrix for filtered x
-  xmean <- rep(0, 7);          # Mean of x0
-  xvar <- diag(7) * 1.0e7;     # Variance of x0 = 10000000
+  xmean <- rep(0, 7)          # Mean of x0
+  xvar <- diag(7) * 1.0e7     # Variance of x0 = 10000000
 
   # Kalman filter
   for (t in 1:TT) {
@@ -154,7 +154,7 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
   # Set up output
   if (smooth == TRUE) {
     retlist <- list(NegLL = LogL, x_fc = x_fc, x_fc_var = x_fc_var, v_t = v_t_out,
-                    y_var_fc = y_var_fc_out, ind_nan = ind_nan_out, Lt = Lt)
+                    y_var_fc = y_var_fc_out, ind_nan = ind_nan_out, Lt = Lt, row3 = row3)
   } else {
     retlist <- list(NegLL = LogL)
   }
@@ -180,6 +180,7 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
 #'     \item{\code{v_t}}{ Prediction residuals.}
 #'     \item{\code{y_var_fc}}{ Covariance matrix for predicting \eqn{y_t}.}
 #'     \item{\code{nan_ind}}{ Indicator for missing observations.}
+#'     \item{\code{row3}}{ 3rd row of C matrix.}
 #'   }
 #'
 #' @return A matrix of smoothed state estimates, where each row corresponds
@@ -206,7 +207,7 @@ kalman_smoother_fe_fh = function(states_filtered) {
   C <- matrix(c(
     1/16, 2/16, 3/16, 4/16, 3/16, 2/16, 1/16,
     1,    0,    0,    0,    0,    0,    0    ,
-    0,0,0,1,1,1,1), nrow = n_col, byrow = TRUE)
+    states_filtered$row3), nrow = n_col, byrow = TRUE)
 
 
   #### Kalman smoother recursion
@@ -280,7 +281,7 @@ kalman_smoother_fe_fh = function(states_filtered) {
 log_likelihood_function_fe_fh <- function(rw_sd, y, quarterID, approx_err) {
 
   # Run the Kalman filter to get the negative log-likelihood
-  result <- kalman_filter_fe_fh(y, rw_sd, quarterID, approx_err, smooth = FALSE)
+  result <- kalman_filter_fe_fh(y, rw_sd = rw_sd, quarterID, approx_err, smooth = FALSE)
   return(result$NegLL)
 }
 
@@ -322,10 +323,21 @@ log_likelihood_function_fe_fh <- function(rw_sd, y, quarterID, approx_err) {
 #' SPF <- SPF_filter(rgdp = y[,2], spf = y[,1])
 #'
 #' @export
-SPF_filter_fe_fh <- function(rgdp, spf, spfFixHor, QuarterID, approx_err = 0.01) {
+SPF_filter_fe_fh <- function(rgdp, spf, spfFixHor, QuarterID, approxerr = c(0.01,0.01)) {
 
   # Prepare input for Kalman filter and smoother
   y <- cbind(spf,rgdp)
+
+  # Original length of y
+  Obs <- dim(y)[1]
+
+  # Check if current and/or next year forecasts are provided
+  CurrentOrNextYear <- sum(!is.nan(y[,1]))
+
+  if (CurrentOrNextYear == 1) {
+    # Adjust length for filter function
+    y <- rbind(y, matrix(NaN,4,2))
+  }
 
   # SPF forecasts prior to latest GDP release is not considered by the filter
   nan_idx <- which(is.nan(rgdp))
@@ -342,14 +354,14 @@ SPF_filter_fe_fh <- function(rgdp, spf, spfFixHor, QuarterID, approx_err = 0.01)
                   fn = log_likelihood_function_fe_fh,
                   y = y,
                   quarterID = QuarterID,
-                  approx_err = approx_err,
+                  approx_err = approxerr,
                   method = "L-BFGS-B",
                   lower = 0.0001,
                   upper = Inf)
 
-  # Given the estimate 'est_sd', filter and smooth states, i.e., implied SPF
-  filtered_states <- kalman_filter_fe_fh(y, rw_sd = est_sd$par, quarterID = QuarterID, approx_err = approx_err, smooth = TRUE)
-  SPF <- as.matrix(kalman_smoother_fe_fh(filtered_states)[,1])
+  # Given the estimate 'exp(est_sd)', filter and smooth states, i.e., implied SPF
+  filtered_states <- kalman_filter_fe_fh(y, rw_sd = est_sd$par, quarterID = QuarterID, approx_err = approxerr, smooth = TRUE)
+  SPF <- as.matrix(kalman_smoother_fe_fh(filtered_states)[1:Obs,1])
 
   # Define output of this function
   colnames(SPF) <- "SPF_implied"

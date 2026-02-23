@@ -71,7 +71,7 @@ data_function_spf <- function(ConsensusMedian = TRUE, SPFPanel = FALSE, FixedHor
       # Median forecasts as SPF consensus
       if (FixedHorizon) {
         # Filter using fixed-event and fixed-horizon forecasts
-        spf_data <- read.csv("output/filter_spf/consensus_median/001_run.csv")
+        spf_data <- read.csv("output/filter_spf/inc_fixedhorizon_median/001_run.csv")
       } else {
         # Filter using fixed-event forecasts
         spf_data <- read.csv("output/filter_spf/consensus_median/001_run.csv")

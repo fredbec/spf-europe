@@ -308,6 +308,9 @@ SPF_RMSE_DM_Test_quarterly <- function(spf_data, ar_benchmark_data,
 
   # Function to convert DM statistic into star code
   dm_to_stars <- function(x) {
+
+    x <- as.numeric(x)
+
     sx <- sign(x)
     ax <- abs(x)
 
@@ -602,6 +605,9 @@ SPF_RMSE_DM_Test_yearly <- function(spf_annual, ar_benchmark_data,
 
   # Function to convert DM statistic into star code
   dm_to_stars <- function(x) {
+
+    x <- as.numeric(x)
+
     sx <- sign(x)
     ax <- abs(x)
 
