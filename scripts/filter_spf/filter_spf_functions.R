@@ -205,6 +205,10 @@ filter_dat <- function(current_quarter,
 
       if (all(is.na(GDP_check[,2]))) {
         approx_err = 0.1
+
+        # Could be an input to the function
+        approx_err_fh <- approx_err
+
         print("Warning: No annual growth rates!")
       } else {
         # Prepare actual GDP data for comparison
