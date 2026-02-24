@@ -35,8 +35,10 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
   ###### State space representation
 
   ### Measurement and transition equation
+  Cons <- matrix(c(rw_sd[1],0,0,0,0,0,0), nrow = 7, ncol = 1)
+
   A <- matrix(c(
-    1,0,0,0,0,0,0,
+    rw_sd[2],0,0,0,0,0,0,
     1,0,0,0,0,0,0,
     0,1,0,0,0,0,0,
     0,0,1,0,0,0,0,
@@ -45,7 +47,7 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
     0,0,0,0,0,1,0 ), nrow = 7, byrow = TRUE)
 
   B <- matrix(0, 7, 1)
-  B[1, 1] <- rw_sd
+  B[1, 1] <- rw_sd[3]
 
   n_col <- 3
 
@@ -92,7 +94,7 @@ kalman_filter_fe_fh = function(y, rw_sd, quarterID, approx_err, smooth = FALSE) 
     yt = y[,t]
 
     # Prior mean and covariance of x_t
-    x_mean_fc <- A %*% xmean                             # (A1)
+    x_mean_fc <- Cons + A %*% xmean                      # (A1)
     x_var_fc = A %*% xvar %*% t(A) + B %*% t(B)          # (A2)
 
     # Prediction and prediction error of y_t|t-1
@@ -283,7 +285,9 @@ kalman_smoother_fe_fh = function(states_filtered) {
 log_likelihood_function_fe_fh <- function(rw_sd, y, quarterID, approx_err) {
 
   # Run the Kalman filter to get the negative log-likelihood
-  result <- kalman_filter_fe_fh(y, rw_sd = rw_sd, quarterID, approx_err, smooth = FALSE)
+  exp_rw_sd <- rw_sd
+  exp_rw_sd[3] <- exp(rw_sd[3])
+  result <- kalman_filter_fe_fh(y, rw_sd = exp_rw_sd, quarterID, approx_err, smooth = FALSE)
   return(result$NegLL)
 }
 
@@ -370,16 +374,19 @@ SPF_filter_fe_fh <- function(rgdp, spf, spfFixHor, QuarterID, approxerr = c(0.01
   }
 
   # Estimate the random walk error standard deviation
-  start <- 0.5
+  start <- c(0, 0.8, log(0.5) ) # 0.5
   est_sd <- optim(par = start,
                   fn = log_likelihood_function_fe_fh,
                   y = y,
                   quarterID = QuarterID,
                   approx_err = approxerr,
                   method = "L-BFGS-B",
-                  lower = 0.0001,
-                  upper = Inf)
+                  lower = c(-Inf, -0.99, -Inf),
+                  upper = c( Inf,  0.99,  Inf) )
 
+  # Transform back from log parameters
+  exp_est_pars <- c(est_sd$par[1:2], exp(est_sd$par[3]) )
+print(exp_est_pars)
   # Given the estimate 'exp(est_sd)', filter and smooth states, i.e., implied SPF
   filtered_states <- kalman_filter_fe_fh(y, rw_sd = est_sd$par, quarterID = QuarterID, approx_err = approxerr, smooth = TRUE)
   SPF <- as.matrix(kalman_smoother_fe_fh(filtered_states)[1:Obs,1])
@@ -397,4 +404,3 @@ SPF_filter_fe_fh <- function(rgdp, spf, spfFixHor, QuarterID, approxerr = c(0.01
   return(Output)
 
 }
-
