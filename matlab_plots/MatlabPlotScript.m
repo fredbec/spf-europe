@@ -185,3 +185,66 @@ box on
 % Store figures and PNG
 saveas(gcf,FileName,'png')
 
+
+
+
+%% Filtered quarterly SPF forecasts during COVID-19
+
+% Plot options
+y_range = [-43 63]; 
+plot_ratio = [6,4];
+FileName = 'SPF_forecast_COVID_h';
+
+
+% Dates to be plotted
+plot_ind = ~isnan(data.gdp_growth) & data.target_year > 2017 & data.target_year < 2025;
+
+% Loop over forecast horizons
+for h = 0:3
+
+    % Create figure
+    hfig = figure;
+        
+    % CEPR recession periods (plot first so lines are on top)
+    max_date = max(dates(plot_ind));
+    min_date = min(dates(plot_ind));
+    for i = 1:length(recession_start)
+        if recession_start(i) < max_date && recession_start(i) > min_date
+            patch([recession_start(i) min(recession_end(i),max_date) ...
+                   min(recession_end(i),max_date) recession_start(i)], ...
+                  [y_range(1) y_range(1) y_range(2) y_range(2)], ...
+                  [0.8 0.8 0.8], ...   % gray color
+                  'EdgeColor','none', ...
+                  'FaceAlpha',greytranspar);    % transparency
+            hold on
+        end
+    end
+
+    % Plot GDP growth
+    plot(dates(plot_ind),data.gdp_growth(plot_ind),'Linewidth',1.5,'Linestyle','-','color','black')
+    hold on
+    
+    % Plot SPF h-step-ahead forecast
+    spf_var = data.("spf_h" + h); 
+    plot(dates(plot_ind),spf_var(plot_ind),'Linewidth',1.5,'Linestyle','-','color','#0072BD')
+    
+    % Range of y-axis
+    ylim(y_range)
+
+    % % Legend names specified as strings
+    % LegendLocation = 'Southeast';
+    % legend('real GDP',"SPF: $h="+h+"$",'interpreter','latex','fontsize',12,'Location',LegendLocation)
+    
+    % Adjust figure margins
+    if ~isempty(plot_ratio)
+        set(gcf, 'Units', 'Inches', 'Position', [0, 0, plot_ratio(1), plot_ratio(2)], ...
+            'PaperUnits', 'Inches', 'PaperSize', plot_ratio)
+    end
+    tightfig(hfig);
+    box on 
+
+    % Store figures and PNG
+    fullFileNamepng = FileName + string(h); 
+    saveas(gcf,fullFileNamepng,'png')
+
+end

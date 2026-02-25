@@ -165,7 +165,7 @@ source(here("scripts", "in_and_out_of_sample_analysis", "mz_reg.R"))
 source(here("scripts", "in_and_out_of_sample_analysis", "forecast_revision.R"))
 
 
-dropYears  <- cbind(2020, 2021) # Drop pandemic
+dropYears  <- cbind(2020, 2021) # Drop pandemic and 2022 because of large forecast errors
 evalPeriod <- cbind(2002, 2019)
 decimals <- 2
 
@@ -175,6 +175,9 @@ SPF_annual <- SPF$spf_annual
 
 
 ### Bias, MZ-regression, forecast efficiency
+
+# Summary stats for main evaluation period
+SummaryStatsMain <- Summary_Stats(SPF_cons, DropPeriod = dropYears, EvalPeriod = evalPeriod)
 
 # Bias (Mean Error) of filtered quarterly SPF using current and next year projections
 SPF_ME_median_cons <- SPF_bias(SPF_cons, DropPeriod = dropYears, EvalPeriod = evalPeriod)
@@ -310,10 +313,16 @@ RMSE_quarterly_panel_median_cons <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_benc
 
 
 ### Forecasting performance over extended time period
-evalPeriod <- cbind(2002,2023)
+evalPeriod <- cbind(2002,2024)
+
+# Summary stats for whole evaluation period
+SummaryStatsFull <- Summary_Stats(SPF_cons, DropPeriod = NA, EvalPeriod = evalPeriod)
 
 # Bias
 SPF_ME_median_cons_full_period <- SPF_bias(SPF_cons, DropPeriod = dropYears, EvalPeriod = evalPeriod)
+
+# Mincer-Zarnowitz regressions
+MZReg_median_cons_full_period <- MZReg(SPF_cons, DropPeriod = dropYears, EvalPeriod = evalPeriod, digits = decimals)
 
 # RMSE
 RMSE_quarterly_median_cons_full_period <- SPF_RMSE_DM_Test_quarterly(SPF_cons,
@@ -393,11 +402,16 @@ write.csv(
 
 
 
-
-
 ######## Print the results
 
 ##### Median consensus
+
+### Summary statistics
+# 2002 - 2019
+round(SummaryStatsMain,decimals)
+
+# 2002 - 2024
+round(SummaryStatsFull,decimals)
 
 ### Bias (Mean forecast error)
 round(SPF_ME_median_cons,decimals)
@@ -405,6 +419,7 @@ round(SPF_ME_median_cons_full_period,decimals)
 
 ### Mincer-Zarnowitz regressions
 print(MZReg_median_cons)
+print(MZReg_median_cons_full_period)
 
 ### Errors-on-Revision regressions
 print(ErrorOnRev_median_cons)

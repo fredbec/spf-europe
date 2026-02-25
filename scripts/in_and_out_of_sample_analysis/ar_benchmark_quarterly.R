@@ -101,7 +101,7 @@ ar_benchmark_quarterly = function(rgdp, ar_length, rw_length, max_lag, SampleEnd
 
 
   # Loop over each vintage
-  for (i in seq_len(nrow(vintages) - 4)) {
+  for (i in seq_len(nrow(vintages)) - 0) {   # instead of - 4
     this_year <- vintages$origin_year[i]
     this_month <- vintages$origin_month[i]
     this_quarter <- floor(this_month / 3) + 1

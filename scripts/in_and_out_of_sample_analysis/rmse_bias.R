@@ -711,3 +711,57 @@ BiasSPFPanel <- function(SPF_panel, EvalPeriod = c(2002, 2019), digits = 3, Drop
   return(bias_table)
 
 }
+
+
+
+
+#' Summary statistics for consensus SPF and real GDP growth
+#'
+#' @param spf_data Data frame with SPF forecasts and realized GDP growth (from `data_function_spf.R`).
+#' @param EvalPeriod Numeric 2×1 matrix giving start and end years for evaluation (default: 2002–2019).
+#' @param DropPeriod Optional matrix of periods (start–end years) to exclude from evaluation.
+#'
+#' @return Tibble with intercept estimates, standard errors, and p-values for each forecast horizon.
+#' @export
+Summary_Stats <- function(spf_data, EvalPeriod = cbind(2002, 2019), DropPeriod = NA) {
+
+  # Drop missings
+  evaluation_data <- spf_data %>%
+    filter(!(is.na(spf_h0) | is.na(spf_h4)))
+
+  # Adjust sample start and end points
+  evaluation_data <- evaluation_data %>%
+    filter(target_year < (EvalPeriod[2]+1) & target_year > (EvalPeriod[1]-1))
+
+  # Drop periods if specified
+  if (any(!is.na(DropPeriod))) {
+    for (i in 1:dim(DropPeriod)[1]) {
+      evaluation_data <- evaluation_data %>%
+        filter(!(target_year %in% c(DropPeriod[i,1]:DropPeriod[i,2]) ))
+    }
+  }
+
+  # Summary statistics
+  summary_stats <- evaluation_data %>%
+    select(gdp_growth, spf_h0, spf_h1, spf_h2, spf_h3, spf_h4) %>%
+    pivot_longer(cols = everything(),
+                 names_to = "variable",
+                 values_to = "value") %>%
+    group_by(variable) %>%
+    summarise(
+      mean = mean(value, na.rm = TRUE),
+      sd   = sd(value, na.rm = TRUE),
+      min  = min(value, na.rm = TRUE),
+      max  = max(value, na.rm = TRUE),
+      N    = sum(!is.na(value)),
+      .groups = "drop"
+    ) %>%
+    as.data.frame()
+
+  # Move variable column to row names
+  rownames(summary_stats) <- summary_stats$variable
+  summary_stats$variable <- NULL
+
+  return(summary_stats)
+}
+
