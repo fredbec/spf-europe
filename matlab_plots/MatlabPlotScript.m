@@ -6,7 +6,7 @@ clc
 
 % Read in plot data
 data = readtable('SPF_plot_data.csv');
-data(data.target_year < 2001,:) = [];
+data(data.target_year < 2002,:) = [];
 
 % Create date variable
 year = data.target_year;
@@ -63,7 +63,7 @@ for h = 0:3
     end
 
     % Plot GDP growth
-    plot(dates(plot_ind),data.gdp_growth(plot_ind),'Linewidth',1.5,'Linestyle','-','color','black')
+    plot(dates(plot_ind),data.gdp_growth(plot_ind),'Linewidth',1.5,'Linestyle','--','color','black')
     hold on
     
     % Plot SPF h-step-ahead forecast
@@ -96,7 +96,7 @@ end
 hfig = figure;
 
 % Draw empty plot
-p1 = plot(NaN,NaN,'Linewidth',1.5,'Linestyle','-','color','black');
+p1 = plot(NaN,NaN,'Linewidth',1.5,'Linestyle','--','color','black');
 hold on
 p2 = plot(NaN,NaN,'Linewidth',1.5,'Linestyle','-','color','#0072BD');
 
@@ -197,7 +197,7 @@ FileName = 'SPF_forecast_COVID_h';
 
 
 % Dates to be plotted
-plot_ind = ~isnan(data.gdp_growth) & data.target_year > 2017 & data.target_year < 2025;
+plot_ind = ~isnan(data.gdp_growth) & data.target_year > 2018 & data.target_year < 2025;
 
 % Loop over forecast horizons
 for h = 0:3
@@ -221,7 +221,7 @@ for h = 0:3
     end
 
     % Plot GDP growth
-    plot(dates(plot_ind),data.gdp_growth(plot_ind),'Linewidth',1.5,'Linestyle','-','color','black')
+    plot(dates(plot_ind),data.gdp_growth(plot_ind),'Linewidth',1.5,'Linestyle','--','color','black')
     hold on
     
     % Plot SPF h-step-ahead forecast

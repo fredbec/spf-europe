@@ -200,6 +200,10 @@ RMSE_quarterly_median_cons <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quar
                                                          DropPeriod = dropYears,
                                                          EvalPeriod = evalPeriod)
 
+RMSE_quarterly_median_cons_no_GFC <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                                                DropPeriod = cbind(2009, 2009),
+                                                                EvalPeriod = evalPeriod)
+
 # Evaluation of yearly SPF against benchmark models
 RMSE_yearly_median_cons <- SPF_RMSE_DM_Test_yearly(SPF_annual, AR_bench_yearly,
                                                    DropPeriod = dropYears,
@@ -261,6 +265,21 @@ disagreement_summary <- sapply(
 )
 
 disagreement_summary <- round(t(disagreement_summary), decimals)
+
+# Excluding COVID
+disagreement_summary_pre_covid <- sapply(
+  disagreement[disagreement$ref_period < "2020 Q1", ] %>% select(starts_with("IQR")),
+  function(x) {
+    c(
+      N      = sum(!is.na(x)),
+      min    = min(x, na.rm = TRUE),
+      mean   = mean(x, na.rm = TRUE),
+      max    = max(x, na.rm = TRUE)
+    )
+  }
+)
+
+disagreement_summary_pre_covid <- round(t(disagreement_summary_pre_covid), decimals)
 
 
 
@@ -402,7 +421,7 @@ write.csv(
 
 
 
-######## Print the results
+######## Print the results (Order as they appear in first draft)
 
 ##### Median consensus
 
@@ -413,6 +432,19 @@ round(SummaryStatsMain,decimals)
 # 2002 - 2024
 round(SummaryStatsFull,decimals)
 
+### Root Mean Squared Errors of quarterly SPF and DM-test results
+# Main results
+RMSE_quarterly_median_cons$RMSE
+RMSE_quarterly_median_cons$DM_stars # significance levels
+
+# Excluding GFC
+RMSE_quarterly_median_cons_no_GFC$RMSE
+RMSE_quarterly_median_cons_no_GFC$DM_stars
+
+# Full sample, excluding COVID
+RMSE_quarterly_median_cons_full_period$RMSE
+RMSE_quarterly_median_cons_full_period$DM_stars
+
 ### Bias (Mean forecast error)
 round(SPF_ME_median_cons,decimals)
 round(SPF_ME_median_cons_full_period,decimals)
@@ -421,19 +453,15 @@ round(SPF_ME_median_cons_full_period,decimals)
 print(MZReg_median_cons)
 print(MZReg_median_cons_full_period)
 
+
+
+
 ### Errors-on-Revision regressions
 print(ErrorOnRev_median_cons)
 
 ### Revisions-on-Revision regressions
 print(RevOnRev_median_cons)
 
-
-### Root Mean Squared Errors of quarterly SPF and DM-test results
-RMSE_quarterly_median_cons$RMSE
-RMSE_quarterly_median_cons$DM_stars # significance levels
-
-RMSE_quarterly_median_cons_full_period$RMSE
-RMSE_quarterly_median_cons_full_period$DM_stars
 
 
 ### RMSE and DM test of yearly SPF forecasts (additional results probably not reported)
@@ -450,6 +478,7 @@ RMSE_quarterly_median_cons_full_period$DM_stars
 summary(panel_size_ts_trimmed$n_panelists)
 
 # summary Disagreement
+disagreement_summary_pre_covid
 disagreement_summary
 
 ### Bias (Mean forecast error)
