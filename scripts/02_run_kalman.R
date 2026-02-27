@@ -6,8 +6,8 @@ source(here("scripts", "filter_spf", "filter_spf_functions.R"))
 
 
 
-for(spec_id in c("consensus_median", "consensus_mean",
-                 "inc_fixedhorizon_median", "inc_fixedhorizon_mean")){
+for(spec_id in c("consensus_median", "consensus_mean", "individual",
+                 "inc_fixedhorizon_median", "inc_fixedhorizon_mean", "inc_fixedhorizon_individual")){
 
   spec <- read_spec(spec_id)
 
