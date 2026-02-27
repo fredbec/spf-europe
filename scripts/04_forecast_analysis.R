@@ -421,7 +421,7 @@ write.csv(
 
 
 
-######## Print the results (Order as they appear in first draft)
+######## Print the results
 
 ##### Median consensus
 
@@ -453,9 +453,6 @@ round(SPF_ME_median_cons_full_period,decimals)
 print(MZReg_median_cons)
 print(MZReg_median_cons_full_period)
 
-
-
-
 ### Errors-on-Revision regressions
 print(ErrorOnRev_median_cons)
 
@@ -463,23 +460,10 @@ print(ErrorOnRev_median_cons)
 print(RevOnRev_median_cons)
 
 
-
-### RMSE and DM test of yearly SPF forecasts (additional results probably not reported)
-# round(RMSE_yearly_median_cons$RMSE_yearly,decimals)
-# RMSE_yearly_median_cons$DM_stars_yearly
-
-
-
-
-
 ##### Panel
 
 # Survey respondents over time
 summary(panel_size_ts_trimmed$n_panelists)
-
-# summary Disagreement
-disagreement_summary_pre_covid
-disagreement_summary
 
 ### Bias (Mean forecast error)
 print(Bias_panel)
@@ -493,6 +477,9 @@ print(ErrorOnRev_panel)
 ### Revisions-on-Revision regressions
 print(RevOnRev_panel)
 
+# summary Disagreement
+disagreement_summary_pre_covid
+disagreement_summary
 
 
 ##### Robustness
@@ -506,4 +493,6 @@ RMSE_quarterly_panel_median_cons$RMSE
 
 
 
-
+### RMSE and DM test of yearly SPF forecasts (additional results probably not reported)
+# round(RMSE_yearly_median_cons$RMSE_yearly,decimals)
+# RMSE_yearly_median_cons$DM_stars_yearly
