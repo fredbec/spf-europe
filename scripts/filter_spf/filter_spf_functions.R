@@ -433,7 +433,8 @@ run_filter_from_settings <- function(settings){
       SPF_data <- SPF_data |>
         DT(type_format == "POINT") |>
         DT(forecast_year >= 2001) |>
-        setnames("prediction", "ens_fc") |>
+        setnames("prediction", "ens_fc") |> #for consistency in naming (relevant downstream)
+        DT(!is.na(ens_fc)) |>
         DT(, horizon := target_year - forecast_year) |>
         DT(horizon <= 1) |>
         DT(, horizon := NULL) |>
