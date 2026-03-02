@@ -2,8 +2,11 @@ library(here)
 library(data.table)
 DT <- `[`
 
-source(here("scripts", "filter_spf", "filter_spf_functions.R"))
-
+source(here("R", "kalman_filter_runner.R"))
+source(here("R", "config.R"))
+source(here("R", "io.R"))
+source(here("R", "kalman_filter_core", "kalman_filter.R"))
+source(here("R", "kalman_filter_core", "kalman_filter_fe_fh.R"))
 
 
 for(spec_id in c("consensus_median", "consensus_mean", "individual",
