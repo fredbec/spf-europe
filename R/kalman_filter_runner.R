@@ -431,6 +431,7 @@ run_filter_from_settings <- function(settings){
       SPF_fixedhorizon <- SPF_data |>
         copy() |
         DT(type_target == "quarterly") |>
+        DT(, type_target := NULL) |>
         split(by = "forecaster_id")
 
       SPF_data <- SPF_data |>

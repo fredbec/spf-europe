@@ -305,7 +305,8 @@ process_spf <- function() {
                           "target_quarter",
                           "forecast_year",
                           "forecast_quarter",
-                          "ens_fc"))
+                          "ens_fc",
+                          "type_target"))
 
 
 
