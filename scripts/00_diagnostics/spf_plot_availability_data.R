@@ -8,7 +8,7 @@ library(patchwork)
 DT <- `[`
 
 
-allqs <- data.table::fread(here("data", "spf_availability_quartersbyhor.csv")) |>
+allqs <- data.table::fread(here("scripts", "00_diagnostics", "spf_availability_quartersbyhor.csv")) |>
   DT(, diffin_factor := paste0(diffin * 4) |>
        factor(levels = c("2", "6", "18", "19"))) |>
   DT(, forecast_origin_quarter := paste0(forecast_year, "Q", forecast_quarter)) |>
