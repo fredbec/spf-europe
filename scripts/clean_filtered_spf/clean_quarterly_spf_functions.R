@@ -16,7 +16,7 @@ data_function_spf <- function(ConsensusMedian = TRUE, SPFPanel = FALSE, FixedHor
     arrange(origin_year, origin_month, target_year, target_quarter) %>%  # ensure correct order
     group_by(origin_year, origin_month) %>%
     mutate(
-      gdp_growth = ( (rgdp / lag(rgdp) ) ^ 4 - 1) * 100,
+      gdp_growth = ( (rgdp / dplyr::lag(rgdp) ) ^ 4 - 1) * 100,
     ) %>%
     ungroup()
 

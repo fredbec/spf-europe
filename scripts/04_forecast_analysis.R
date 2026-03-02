@@ -219,7 +219,7 @@ Bias_panel <- BiasSPFPanel(SPF_panel, EvalPeriod = evalPeriod, digits = decimals
 # Mincer-Zarnowitz regression
 MZReg_panel <- MZRegPanel(SPF_panel, EvalPeriod = evalPeriod, digits = decimals)
 
-# Forecast errors on forecast revisions
+# Forecast errors on forecast revisions (FixedEffects = TRUE yields same results)
 ErrorOnRev_panel <- ErrorsOnRevisionPanel(SPF_panel, EvalPeriod = evalPeriod, digits = decimals)
 
 # Forecast revisions on revisions
@@ -243,23 +243,25 @@ disagreement <- SPF_panel %>%
   ) %>%
   arrange(ref_period) %>%
   mutate(
-    IQR_h1 = lead(IQR_h1, 1),
-    IQR_h2 = lead(IQR_h2, 2),
-    IQR_h3 = lead(IQR_h3, 3),
-    IQR_h4 = lead(IQR_h4, 4)
+    IQR_h1 = dplyr::lead(IQR_h1, 1),
+    IQR_h2 = dplyr::lead(IQR_h2, 2),
+    IQR_h3 = dplyr::lead(IQR_h3, 3),
+    IQR_h4 = dplyr::lead(IQR_h4, 4)
   ) %>%
   filter(!is.na(IQR_h0))
 
 
 # Summary statistics
 disagreement_summary <- sapply(
-  disagreement %>% select(starts_with("IQR")),
+  disagreement[disagreement$ref_period >= "2002 Q1", ] %>%
+    select(starts_with("IQR")),
   function(x) {
     c(
-      N      = sum(!is.na(x)),
-      min    = min(x, na.rm = TRUE),
-      mean   = mean(x, na.rm = TRUE),
-      max    = max(x, na.rm = TRUE)
+      N    = sum(!is.na(x)),
+      mean = mean(x, na.rm = TRUE),
+      sd   = sd(x, na.rm = TRUE),
+      min  = min(x, na.rm = TRUE),
+      max  = max(x, na.rm = TRUE)
     )
   }
 )
@@ -268,13 +270,16 @@ disagreement_summary <- round(t(disagreement_summary), decimals)
 
 # Excluding COVID
 disagreement_summary_pre_covid <- sapply(
-  disagreement[disagreement$ref_period < "2020 Q1", ] %>% select(starts_with("IQR")),
+  disagreement[ (disagreement$ref_period >= "2002 Q1") &
+                (disagreement$ref_period < "2020 Q1"), ] %>%
+    select(starts_with("IQR")),
   function(x) {
     c(
-      N      = sum(!is.na(x)),
-      min    = min(x, na.rm = TRUE),
-      mean   = mean(x, na.rm = TRUE),
-      max    = max(x, na.rm = TRUE)
+      N    = sum(!is.na(x)),
+      mean = mean(x, na.rm = TRUE),
+      sd   = sd(x, na.rm = TRUE),
+      min  = min(x, na.rm = TRUE),
+      max  = max(x, na.rm = TRUE)
     )
   }
 )
@@ -466,10 +471,10 @@ print(RevOnRev_median_cons)
 summary(panel_size_ts_trimmed$n_panelists)
 
 ### Bias (Mean forecast error)
-print(Bias_panel)
+#print(Bias_panel)
 
 ### Mincer-Zarnowitz regressions
-print(MZReg_panel)
+#print(MZReg_panel)
 
 ### Errors-on-Revision regressions
 print(ErrorOnRev_panel)

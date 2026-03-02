@@ -186,11 +186,12 @@ RevisionsOnRevisionCons = function(SPF_cons, EvalPeriod = cbind(2002, 2019), dig
 #' @param EvalPeriod Numeric vector of length 2 giving start and end years for evaluation (default: c(2002, 2019)).
 #' @param digits Number of digits to round coefficients, SEs, and statistics (default: 3).
 #' @param DropPeriod Optional matrix of periods (start–end years) to exclude from evaluation.
+#' @param FixedEffects Indicator for estimating fixed-effects (default: FALSE).
 #'
 #' @return Data frame with alpha and beta coefficients (with cluster-robust SEs),
 #'         R-squared, sample size, and numeric horizon as row names.
 #' @export
-ErrorsOnRevisionPanel <- function(SPF_panel, EvalPeriod = c(2002, 2019), digits = 3, DropPeriod = NA) {
+ErrorsOnRevisionPanel <- function(SPF_panel, EvalPeriod = c(2002, 2019), digits = 3, DropPeriod = NA, FixedEffects = FALSE) {
 
   # Filter evaluation period
   SPF_panel <- SPF_panel %>%
@@ -218,10 +219,27 @@ ErrorsOnRevisionPanel <- function(SPF_panel, EvalPeriod = c(2002, 2019), digits 
       ) %>%
       filter(!is.na(e), !is.na(r), !is.na(forecaster_id))
 
-    model <- lm(e ~ r, data = df)
+    if (FixedEffects) {
+      library(plm)        # For fixed-effects (this causes problems sometimes now)
+      # Fixed-effects
+      model <- plm(e ~ r,
+                   data = df,
+                   index = c("forecaster_id", "ref_period"),
+                   model = "within")
 
-    # Cluster-robust covariance by forecaster
-    vcov_cluster <- vcovCL(model, cluster = df$forecaster_id)
+      # Cluster-robust covariance by forecaster
+      vcov_cluster <- vcovHC(model,
+                             method = "arellano",
+                             type = "HC1",
+                             cluster = "group")
+
+    } else {
+      # OLS
+      model <- lm(e ~ r, data = df)
+
+      # Cluster-robust covariance by forecaster
+      vcov_cluster <- vcovCL(model, cluster = df$forecaster_id)
+    }
 
     list(model = model, vcov = vcov_cluster, df = df)
   })
@@ -232,23 +250,43 @@ ErrorsOnRevisionPanel <- function(SPF_panel, EvalPeriod = c(2002, 2019), digits 
     paste0("$\\underset{(", se, ")}{", coef, "}$")
   }
 
-  ErrOnRev_table <- data.frame(
-    horizon = horizons,
+  if (FixedEffects) {
+    ErrOnRev_table <- data.frame(
+      horizon = horizons,
 
-    alpha = mapply(fmt,
-                   sapply(ErrOnRev_results, function(x) round(coef(x$model)[1], digits)),
-                   sapply(ErrOnRev_results, function(x) round(sqrt(diag(x$vcov))[1], digits))
-    ),
+      beta = mapply(fmt,
+                    sapply(ErrOnRev_results, function(x)
+                      round(coef(x$model)["r"], digits)),
+                    sapply(ErrOnRev_results, function(x)
+                      round(sqrt(diag(x$vcov))["r"], digits))
+      ),
 
-    beta = mapply(fmt,
-                  sapply(ErrOnRev_results, function(x) round(coef(x$model)[2], digits)),
-                  sapply(ErrOnRev_results, function(x) round(sqrt(diag(x$vcov))[2], digits))
-    ),
+      r2 = sapply(ErrOnRev_results, function(x)
+        round(summary(x$model)$r.squared["rsq"], digits)),
 
-    r2 = sapply(ErrOnRev_results, function(x) round(summary(x$model)$r.squared, digits)),
+      N = sapply(ErrOnRev_results, function(x)
+        nobs(x$model))
+    )
 
-    N = sapply(ErrOnRev_results, function(x) nobs(x$model))
-  )
+  } else {
+    ErrOnRev_table <- data.frame(
+      horizon = horizons,
+
+      alpha = mapply(fmt,
+                     sapply(ErrOnRev_results, function(x) round(coef(x$model)[1], digits)),
+                     sapply(ErrOnRev_results, function(x) round(sqrt(diag(x$vcov))[1], digits))
+      ),
+
+      beta = mapply(fmt,
+                    sapply(ErrOnRev_results, function(x) round(coef(x$model)[2], digits)),
+                    sapply(ErrOnRev_results, function(x) round(sqrt(diag(x$vcov))[2], digits))
+      ),
+
+      r2 = sapply(ErrOnRev_results, function(x) round(summary(x$model)$r.squared, digits)),
+
+      N = sapply(ErrOnRev_results, function(x) nobs(x$model))
+    )
+  }
 
   # Horizon as row names
   row.names(ErrOnRev_table) <- ErrOnRev_table$horizon
