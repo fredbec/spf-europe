@@ -6,10 +6,10 @@ DT <- `[`
 #GOAL OF THIS SCRIPT
 #first check if data are the same for the period that data overlaps
 
-pre14dat <- data.table::fread(here("data", "revdatpre14.csv")) |>
+pre14dat <- data.table::fread(here("data", "processed", "revdatpre14.csv")) |>
   DT(, ind := "pre")|>
   DT(, origin_day := NA) #for rbinding, since we don't have info on day for this data
-post14dat <- data.table::fread(here("data", "revdatpost14.csv"))|>
+post14dat <- data.table::fread(here("data","processed", "revdatpost14.csv"))|>
   DT(, ind := "post")
 
 
