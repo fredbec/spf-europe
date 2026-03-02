@@ -428,29 +428,9 @@ run_filter_from_settings <- function(settings){
 
     if(grepl("fixedhorizon", settings$spec_id)){
 
-      SPF_data <- SPF_data |>
-        DT(type_format == "POINT") |>
-        DT(forecast_year >= 2001) |>
-        setnames("prediction", "ens_fc") |> #for consistency in naming (relevant downstream)
-        DT(!is.na(ens_fc)) |>
-        DT(, horizon := target_year - forecast_year) |>
-        DT(horizon <= 1) |>
-        DT(, horizon := NULL) |>
-        DT(, fc_inst := forecast_year + 0.25*(forecast_quarter-1)) |>
-        DT(, tg_inst := target_year + 0.25*(target_quarter-1)) |>
-        DT(type_target == "quarterly", horizon := tg_inst - fc_inst) |>
-        DT(is.na(horizon) | horizon == 0.5) |>
-        DT(, count := .N, by = c("forecast_year", "forecast_quarter", "forecaster_id")) |>
-        DT(count == 3) #only keep instances with all 3 forecast (annual c, annual n, quarterly)
-
       SPF_fixedhorizon <- SPF_data |>
+        copy() |
         DT(type_target == "quarterly") |>
-        DT(, .SD, .SDcols = c("forecaster_id",
-                              "target_year",
-                              "target_quarter",
-                              "forecast_year",
-                              "forecast_quarter",
-                              "ens_fc")) |>
         split(by = "forecaster_id")
 
       SPF_data <- SPF_data |>
@@ -461,20 +441,6 @@ run_filter_from_settings <- function(settings){
                               "forecast_quarter",
                               "ens_fc"))
     } else{
-
-      SPF_data <- SPF_data |>
-        DT(type_format == "POINT") |>
-        DT(type_target == "annual") |>
-        DT(forecast_year >= 2001) |>
-        DT(, horizon := target_year - forecast_year) |>
-        DT(horizon <= 1) |>
-        DT(, horizon := NULL) |>
-        setnames("prediction", "ens_fc") |> #for compatibility
-        DT(, .SD, .SDcols = c("forecaster_id",
-                              "target_year",
-                              "forecast_year",
-                              "forecast_quarter",
-                              "ens_fc"))
 
       SPF_fixedhorizon <- NULL
     }

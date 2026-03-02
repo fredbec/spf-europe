@@ -1,5 +1,5 @@
 key,value
 spec_id,inc_fixedhorizon_individual
-data_input_primary,"spf_consolidated.csv"
+data_input_primary,"spf_individual_annualandquarterly.csv"
 data_input_secondary,NA
 ensemble_stat,NA
