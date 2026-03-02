@@ -10,12 +10,15 @@ library(readxl)     # For reading in .xlsx files
 library(here)
 
 
-# Read in filtered SPF forecasts
+### Read in filtered SPF forecasts
+
+# Consensus
 SPF <- readRDS(
   here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_median_full.rds")
 )
 SPF <- SPF$SPF_consensus
 
+# Panel
 SPF_panel <- readRDS(
   here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_panel_full.rds")
 )
@@ -292,6 +295,18 @@ disagreement_summary_pre_covid <- round(t(disagreement_summary_pre_covid), decim
 
 ####### Robustness
 
+###  Consensus using both fixed-event and fixed-horizon forecasts
+SPF_FH <- readRDS(
+  here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_FH_median_full.rds")
+)
+SPF_FH <- SPF_FH$SPF_consensus
+
+# Out-of-sample RMSE of fixed-event versus fixed-event and fixed-horizon
+RMSE_quarterly_median_fh <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                                       DropPeriod = dropYears,
+                                                       EvalPeriod = evalPeriod,
+                                                       SPFalternative = SPF_FH$evaluation_data_ny)
+
 ### Mean as consensus forecast
 SPF_mean <- readRDS(
   here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_mean_full.rds")
@@ -487,7 +502,10 @@ disagreement_summary_pre_covid
 disagreement_summary
 
 
-##### Robustness
+##### Robustness (not reported becasue numerically virtually identical)
+
+# Root Mean Squared Errors of median without and with fixed-horizon forecasts
+RMSE_quarterly_median_fh$RMSE # spf_alt_rmse is with fixed-horizon
 
 # Root Mean Squared Errors of median versus mean consensus
 RMSE_quarterly_mean_cons$RMSE # spf_alt_rmse is mean consensus
