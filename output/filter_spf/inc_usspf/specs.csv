@@ -1,0 +1,5 @@
+key,value
+spec_id,inc_usspf
+data_input_primary,"""spf_median_forecast.csv"""
+data_input_secondary,"""spf_us_median_forecast.csv"""
+ensemble_stat,median

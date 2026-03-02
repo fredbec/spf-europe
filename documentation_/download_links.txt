@@ -1,0 +1,19 @@
+US SPF data:
+	raw data location in repo:
+		data/raw/Median_RGDP_Growth.xlsx
+	Source:
+		https://www.philadelphiafed.org/surveys-and-data/rgdp
+		- Download "Median Responses" 
+		- Documentation is 
+
+EU Industrial Production data:
+	raw data location in repo:
+		data/raw/estat_ei_is_m_vtg.tsv
+		data/raw/estat_ei_is_m_vtg.tsv
+	Source:
+		https://ec.europa.eu/eurostat/databrowser/explore/all/general?lang=en&subtheme=euroind.euroind_vtg&display=list&sort=category&extractionId=ei_na_q_vtg
+		- Download  "Industrial production - monthly data - vintages from 2021 onwards (ei_is_m_vtg)" and " 	Industrial production - monthly data - vintages from 2001 to 2020 (ei_is_m_vtgfix)"
+		- Retrieved on 2025/09/10
+
+			
+

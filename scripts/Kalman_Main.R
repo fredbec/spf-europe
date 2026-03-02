@@ -25,7 +25,7 @@ SPFevalMonth <- 1
 #### Quick plots
 
 # EU-SPF filter without additional variables
-SPF <- data_function_spf(NA,endMonth = SPFevalMonth)
+SPF <- data_function_spf(NA,endMonth = SPFevalMonth, SPFPanel = FALSE)
 rgdp_all           <- SPF$rgdp_all
 spf_forecasts_cy   <- SPF$spf_forecasts_cy
 spf_forecasts_ny   <- SPF$spf_forecasts_ny
