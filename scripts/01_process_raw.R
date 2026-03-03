@@ -90,7 +90,7 @@ process_rtd <- function() {
        by = c("origin_year", "origin_month", "target_year", "target_quarter")) |>
     DT(number == 1) |>
     setorder(origin_year, origin_month, origin_day, target_year, target_quarter) |>
-    DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
+    DT(, rgdp_growth := 4 * (log(rgdp / shift(rgdp,1))) * 100, #factor 4 because of annualization
        by = .(origin_year, origin_month, origin_day)) |>
     DT(!is.na(rgdp_growth)) |>
     DT(, c("number") := NULL)|>
@@ -98,7 +98,7 @@ process_rtd <- function() {
 
   rtd_pre14 <- rtd_pre14 |>
     setorder(origin_year, origin_month, target_year, target_quarter) |>
-    DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
+    DT(, rgdp_growth := 4 * (log(rgdp / shift(rgdp,1))) * 100, #factor 4 because of annualization
        by = .(origin_year, origin_month)) |>
     DT(!is.na(rgdp_growth)) |>
     DT(, origin_day := ifelse(origin_month == 2, 28,
@@ -253,8 +253,7 @@ process_spf <- function() {
       DT(, forecast_quarter := qnum) |>
       DT(, .SD, .SDcols = c("forecaster_id", "forecast_year", "forecast_quarter",
                             "target_id", "target_year", "target_quarter",
-                            "type_target", "type_format", "prediction")) |>
-      DT(, prediction := as.numeric(prediction))
+                            "type_target", "type_format", "prediction"))
 
     alldata[[i]] <- spf_long
 
@@ -268,7 +267,9 @@ process_spf <- function() {
     DT(, .SD, .SDcols = c("forecaster_id", "forecast_year", "forecast_quarter",
                           "target_id", "target_year", "target_quarter",
                           "type_target", "type_format",
-                          "release_deadline", "release_publication", "prediction"))
+                          "release_deadline", "release_publication", "prediction")) |>
+    DT(, prediction := as.numeric(prediction)) |>
+    DT(, prediction := 100 * log(1+prediction/100))
 
   data.table::fwrite(alldata, here("data", "processed", "spf_consolidated.csv"))
 
