@@ -229,66 +229,15 @@ ErrorOnRev_panel <- ErrorsOnRevisionPanel(SPF_panel, EvalPeriod = evalPeriod, di
 RevOnRev_panel <- RevisionsOnRevisionPanel(SPF_panel, EvalPeriod = evalPeriod, digits = decimals)
 
 
+### Disagreement among panelists
+source(here("scripts", "in_and_out_of_sample_analysis", "disagreement.R"))
 
+# Sample from 2002 to 2019
+disagreement_pre_covid <- SPF_IQR(SPF_panel, EvalPeriod = cbind(2002, 2019))
+disagreement_summary_pre_covid <- round(t(disagreement_pre_covid$summary_stats), decimals)
 
-
-
-###### Disagreement among panelists
-disagreement <- SPF_panel %>%
-  group_by(ref_period) %>%
-  summarise(
-    IQR_h0 = IQR(spf_h0, na.rm = TRUE),
-    IQR_h1 = IQR(spf_h1, na.rm = TRUE),
-    IQR_h2 = IQR(spf_h2, na.rm = TRUE),
-    IQR_h3 = IQR(spf_h3, na.rm = TRUE),
-    IQR_h4 = IQR(spf_h4, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  arrange(ref_period) %>%
-  mutate(
-    IQR_h1 = dplyr::lead(IQR_h1, 1),
-    IQR_h2 = dplyr::lead(IQR_h2, 2),
-    IQR_h3 = dplyr::lead(IQR_h3, 3),
-    IQR_h4 = dplyr::lead(IQR_h4, 4)
-  ) %>%
-  filter(!is.na(IQR_h0))
-
-
-# Summary statistics
-disagreement_summary <- sapply(
-  disagreement[disagreement$ref_period >= "2002 Q1", ] %>%
-    select(starts_with("IQR")),
-  function(x) {
-    c(
-      N    = sum(!is.na(x)),
-      mean = mean(x, na.rm = TRUE),
-      sd   = sd(x, na.rm = TRUE),
-      min  = min(x, na.rm = TRUE),
-      max  = max(x, na.rm = TRUE)
-    )
-  }
-)
-
-disagreement_summary <- round(t(disagreement_summary), decimals)
-
-# Excluding COVID
-disagreement_summary_pre_covid <- sapply(
-  disagreement[ (disagreement$ref_period >= "2002 Q1") &
-                (disagreement$ref_period < "2020 Q1"), ] %>%
-    select(starts_with("IQR")),
-  function(x) {
-    c(
-      N    = sum(!is.na(x)),
-      mean = mean(x, na.rm = TRUE),
-      sd   = sd(x, na.rm = TRUE),
-      min  = min(x, na.rm = TRUE),
-      max  = max(x, na.rm = TRUE)
-    )
-  }
-)
-
-disagreement_summary_pre_covid <- round(t(disagreement_summary_pre_covid), decimals)
-
+disagreement <- SPF_IQR(SPF_panel, EvalPeriod = cbind(2002, 2024))
+disagreement_summary <- round(t(disagreement$summary_stats), decimals)
 
 
 
@@ -369,6 +318,13 @@ RMSE_quarterly_median_cons_full_period <- SPF_RMSE_DM_Test_quarterly(SPF_cons,
                                                                      DropPeriod = dropYears,
                                                                      EvalPeriod = evalPeriod)
 
+# Out-of-sample RMSE of current and next year versus current year forecasts
+RMSE_quarterly_median_ny_cy <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                                          DropPeriod = dropYears,
+                                                          EvalPeriod = evalPeriod,
+                                                          SPFalternative = SPF$evaluation_data_cy)
+
+
 
 
 
@@ -397,12 +353,11 @@ europe_pu <- europe_pu %>%
 
 
 # Merge EPU with disagreement
-disagreement <- disagreement %>%
+disagreement <- disagreement$disagreement %>%
   left_join(
     europe_pu %>% select(ref_period, EUP),
     by = "ref_period"
   )
-
 
 # Reshape to long format
 disagreement_long <- disagreement %>%
@@ -427,9 +382,24 @@ ggplot(disagreement_long, aes(x = ref_period, y = IQR, color = horizon)) +
   )
 
 
+
 #### Store data to produce Matlab plots
 MatlabPlots <- SPF$evaluation_data_ny %>%
   left_join(disagreement, by = "ref_period") %>%
+  arrange(ref_period)
+
+# Merge with filtered SPF using both fixed-event and fixed-horizon forecasts
+SPF_FH <- readRDS(
+  here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_FH_median_full.rds")
+)
+SPF_FH <- SPF_FH$SPF_consensus$evaluation_data_ny
+
+SPF_FH <- SPF_FH %>%
+  select(ref_period, spf_h0_fh = spf_h0, spf_h1_fh = spf_h1,
+         spf_h2_fh = spf_h2, spf_h3_fh = spf_h3, spf_h4_fh = spf_h4)
+
+MatlabPlots <- MatlabPlots %>%
+  left_join(SPF_FH, by = "ref_period") %>%
   arrange(ref_period)
 
 write.csv(
@@ -513,6 +483,8 @@ RMSE_quarterly_mean_cons$RMSE # spf_alt_rmse is mean consensus
 # Root Mean Squared Errors of median over individual filtered forecasts (spf_alt_rmse)
 RMSE_quarterly_panel_median_cons$RMSE
 
+# Root Mean Squared Errors of current and next year versus current year forecasts
+RMSE_quarterly_median_ny_cy  # h = 4 always needs next year forecasts
 
 
 

@@ -248,3 +248,110 @@ for h = 0:3
     saveas(gcf,fullFileNamepng,'png')
 
 end
+
+
+
+
+
+%% Filtered quarterly SPF forecasts during COVID-19 incorporating fixed-horizon forecasts
+
+% Plot options
+y_range = [-43 63]; 
+plot_ratio = [6,4];
+FileName = 'SPF_forecast_COVID_FH_h';
+
+
+% Dates to be plotted
+plot_ind = ~isnan(data.gdp_growth) & data.target_year > 2018 & data.target_year < 2025;
+
+% Loop over forecast horizons
+for h = 0:3
+
+    % Create figure
+    hfig = figure;
+        
+    % CEPR recession periods (plot first so lines are on top)
+    max_date = max(dates(plot_ind));
+    min_date = min(dates(plot_ind));
+    for i = 1:length(recession_start)
+        if recession_start(i) < max_date && recession_start(i) > min_date
+            patch([recession_start(i) min(recession_end(i),max_date) ...
+                   min(recession_end(i),max_date) recession_start(i)], ...
+                  [y_range(1) y_range(1) y_range(2) y_range(2)], ...
+                  [0.8 0.8 0.8], ...   % gray color
+                  'EdgeColor','none', ...
+                  'FaceAlpha',greytranspar);    % transparency
+            hold on
+        end
+    end
+
+    % Plot GDP growth
+    plot(dates(plot_ind),data.gdp_growth(plot_ind),'Linewidth',1.5,'Linestyle','--','color','black')
+    hold on
+    
+    % Plot SPF h-step-ahead forecast
+    spf_var = data.("spf_h" + h); 
+    plot(dates(plot_ind),spf_var(plot_ind),'Linewidth',1.5,'Linestyle','-','color','#0072BD')
+
+    % Plot SPF h-step-ahead forecast which only exploit current year
+    % projections
+    spf_var = data.("spf_h" + h + "_fh"); 
+    plot(dates(plot_ind),spf_var(plot_ind),'Linewidth',1.5,'Linestyle','-','color','#D95319')
+    
+
+    % Range of y-axis
+    ylim(y_range)
+
+    % % Legend names specified as strings
+    % LegendLocation = 'Southeast';
+    % legend('real GDP',"SPF: $h="+h+"$",'interpreter','latex','fontsize',12,'Location',LegendLocation)
+    
+    % Adjust figure margins
+    if ~isempty(plot_ratio)
+        set(gcf, 'Units', 'Inches', 'Position', [0, 0, plot_ratio(1), plot_ratio(2)], ...
+            'PaperUnits', 'Inches', 'PaperSize', plot_ratio)
+    end
+    tightfig(hfig);
+    box on 
+
+    % Store figures and PNG
+    fullFileNamepng = FileName + string(h); 
+    saveas(gcf,fullFileNamepng,'png')
+
+end
+
+
+% Additional legend as .png
+hfig = figure;
+
+% Draw empty plot
+p1 = plot(NaN,NaN,'Linewidth',1.5,'Linestyle','--','color','black');
+hold on
+p2 = plot(NaN,NaN,'Linewidth',1.5,'Linestyle','-','color','#0072BD');
+p3 = plot(NaN,NaN,'Linewidth',1.5,'Linestyle','-','color','#D95319');
+
+% Remove axis
+axis off
+
+% Legend
+lgd = legend([p1 p2 p3], {'real GDP','SPF: fixed-event', 'SPF: fixed-horizon'}, ...
+    'Interpreter','latex', ...
+    'FontSize',12, ...
+    'Location','northoutside', ...
+    'Orientation','horizontal');
+
+set(gca,'Visible','off')
+set(gcf,'Color','white')
+
+% Get legend size in normalized units
+lgd.Units = 'inches';
+legendPos = lgd.Position;
+
+% Resize figure to legend size (+ small margin)
+set(gcf,'Units','inches')
+set(gcf,'Position',[1 1 legendPos(3) legendPos(4)])
+
+% Save tightly
+tightfig(hfig);
+exportgraphics(gcf,'SPF_FH_legend.png','Resolution',300)
+
