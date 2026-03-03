@@ -429,7 +429,7 @@ run_filter_from_settings <- function(settings){
     if(grepl("fixedhorizon", settings$spec_id)){
 
       SPF_fixedhorizon <- SPF_data |>
-        copy() |
+        copy() |>
         DT(type_target == "quarterly") |>
         DT(, type_target := NULL) |>
         split(by = "forecaster_id")
