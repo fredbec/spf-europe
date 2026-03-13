@@ -104,7 +104,10 @@ placeholder <- function(G,
   } else if(p == 1){
 
     ar_fit <- ar(G, aic = FALSE, order.max = p)
-    phi <- ar_fit$ar
+    phi <- ar_fit$ar[1]
+    sigma2_eps <- ar_fit$var.pred
+    gamma0 <- sigma2_eps / (1-phi^2)
+
     n_fc <- (8 - t_now) - rtd_shift
     n_real <- length(G) - n_fc
 
@@ -116,6 +119,8 @@ placeholder <- function(G,
       cbind(Sigma11, Sigma12),
       cbind(t(Sigma12), Sigma22)
     )
+
+    Sigma <- gamma0 * Sigma
   }
 
   wopt <- w_calc(t_now, fc_horizon, G, Sigma)
