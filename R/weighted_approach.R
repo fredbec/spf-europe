@@ -75,7 +75,7 @@ w_calc <- function(t_now,
 #' Computes the weights for an optimal combination of the current-year
 #' and next-year forecasts
 #'
-#' @param real_time_dat data frame with quarterly observations
+#' @param G_hist data frame with quarterly observations
 #' @param p AR order assumed for DGP
 #' @param t_now current quarter, first quarter of the current year is coded as 1
 #' @param fc_horizon fixed horizon value, relative to current quarter
@@ -83,7 +83,7 @@ w_calc <- function(t_now,
 #' default (last known quarter is 2 quarters prior)
 #'
 #' @return A (2x1) vector, first entry corresponds to the current-year forecast
-placeholder <- function(G,
+placeholder <- function(G_hist,
                         p,
                         t_now,
                         fc_horizon,
@@ -95,21 +95,31 @@ placeholder <- function(G,
 
   last_g <- t_now + rtd_shift
 
+  #demean series
+  G_dm <- G_hist - mean(G_hist)
+
   #estimate or set Sigma
   if(p == 0){
     Sigma <- rbind(
       cbind(matrix(0, 8-last_g, 8-last_g), matrix(0, 8-last_g, 4+last_g)),
       cbind(matrix(0, 4+last_g, 8-last_g), diag(4+last_g))
     )
+
+    #extract last- and possibly current-year observations from G
+    obsid_G <- t_now + rtd_shift + 4
+    G <- rep(0, 12)
+    G[((12-obsid_G)+1):12] <- G_hist[1:obsid_G]
+
   } else if(p == 1){
 
-    ar_fit <- ar(G, aic = FALSE, order.max = p)
+    #estimate AR model (on full history, demeaned series)
+    ar_fit <- ar(G_dm, aic = FALSE, order.max = p)
     phi <- ar_fit$ar[1]
     sigma2_eps <- ar_fit$var.pred
     gamma0 <- sigma2_eps / (1-phi^2)
 
     n_fc <- (8 - t_now) - rtd_shift
-    n_real <- length(G) - n_fc
+    n_real <- 12 - n_fc
 
     Sigma11 <- Sigma_AR1(n_fc, 2*n_fc, n_fc+2, phi)
     Sigma12 <- Sigma_AR1(n_fc, n_fc, n_real+n_fc, phi)
@@ -121,6 +131,13 @@ placeholder <- function(G,
     )
 
     Sigma <- gamma0 * Sigma
+
+    #extract last- and possibly current-year observations from G
+    obsid_G <- t_now + rtd_shift + 4 #"from the back"
+    rev_obsid_G <- 12 - obsid_G #"from the front"
+    G <- rep(NA, 12)
+    G[(rev_obsid_G+1):12] <- G_hist[1:obsid_G]
+    G[1:rev_obsid_G] <- phi^(rev_obsid_G:1)*G_hist[1]
   }
 
   wopt <- w_calc(t_now, fc_horizon, G, Sigma)
