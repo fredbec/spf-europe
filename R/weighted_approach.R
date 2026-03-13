@@ -108,35 +108,14 @@ placeholder <- function(G,
     n_fc <- (8 - t_now) - rtd_shift
     n_real <- length(G) - n_fc
 
-    Sigma11 <- matrix(0, nrow = n_fc, ncol = n_fc)
-    Sigma11 <- sapply(
-      seq_len(nrow(Sigma11)),
-      function(id){
-        exponent <- seq((2*n_fc - id)+1, (n_fc-id)+2)
-        return(phi^exponent)
-        }) |> t()
-
-    Sigma22 <- matrix(0, nrow = n_real, ncol = n_real)
-    Sigma22 <- sapply(
-      seq_len(nrow(Sigma22)),
-      function(id){
-        exponent <- abs(seq((0 - id) + 1, n_real-id))
-        return(phi^exponent)
-      }) |> t()
-
-    Sigma12 <- matrix(0, nrow = n_fc, ncol = n_real)
-    Sigma12 <- sapply(
-      seq_len(nrow(Sigma12)),
-      function(id){
-        exponent <- abs(seq((n_fc - id) + 1, (n_real+n_fc)-id))
-        return(phi^exponent)
-      }) |> t()
+    Sigma11 <- Sigma_AR1(n_fc, 2*n_fc, n_fc+2, phi)
+    Sigma12 <- Sigma_AR1(n_fc, n_fc, n_real+n_fc, phi)
+    Sigma22 <- Sigma_AR1(n_real, 0, n_real, phi)
 
     Sigma <- rbind(
       cbind(Sigma11, Sigma12),
       cbind(t(Sigma12), Sigma22)
     )
-
   }
 
   wopt <- w_calc(t_now, fc_horizon, G, Sigma)
@@ -144,6 +123,17 @@ placeholder <- function(G,
   return(wopt)
 }
 
+#' Small helper function to construct covariance matrix for an AR(1) process
+#' @return A matrix
+Sigma_AR1 <- function(nrow, startexp, endexp, phi){
+
+  sapply(
+    seq_len(nrow),
+    function(id){
+      exponent <- abs(seq((startexp - id)+1, (endexp - id)))
+      return(phi^exponent)
+    }) |> t()
+}
 
 run_weightopt <- function(real_time_data){
 
