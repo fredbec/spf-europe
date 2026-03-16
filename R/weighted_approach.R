@@ -110,9 +110,9 @@ estimate_weights <- function(G_hist,
   } else if(p == 1){
 
     #estimate AR model (on full history, demeaned series)
-    ar_fit <- ar(G_dm, aic = FALSE, order.max = p)
-    phi <- ar_fit$ar[1]
-    sigma2_eps <- ar_fit$var.pred
+    ar_fit <- arima(G_dm, order = c(1,0,0))
+    phi <- ar_fit$coef["ar1"]
+    sigma2_eps <- ar_fit$sigma2
 
     Sigma <- build_sigma_ar1(phi, sigma2_eps, t_now, lastqu_shift)
 
