@@ -79,21 +79,21 @@ w_calc <- function(t_now,
 #' @param p AR order assumed for DGP
 #' @param t_now current quarter, first quarter of the current year is coded as 1
 #' @param fc_horizon fixed horizon value, relative to current quarter
-#' @param rtd_shift last observed growth rate, relative to current quarter, -2 by
+#' @param lastqu_shift last observed growth rate, relative to current quarter, -2 by
 #' default (last known quarter is 2 quarters prior)
 #'
 #' @return A (2x1) vector, first entry corresponds to the current-year forecast
-placeholder <- function(G_hist,
-                        p,
-                        t_now,
-                        fc_horizon,
-                        rtd_shift = -2){
+estimate_weights <- function(G_hist,
+                             p,
+                             t_now,
+                             fc_horizon,
+                             lastqu_shift = -2){
 
   if(p > 1){
     stop("method not implemented yet for p > 1")
   }
 
-  last_g <- t_now + rtd_shift
+  last_g <- t_now + lastqu_shift
 
   #demean series
   G_dm <- G_hist - mean(G_hist)
@@ -106,7 +106,7 @@ placeholder <- function(G_hist,
     )
 
     #extract last- and possibly current-year observations from G
-    obsid_G <- t_now + rtd_shift + 4
+    obsid_G <- t_now + lastqu_shift + 4
     G <- rep(0, 12)
     G[((12-obsid_G)+1):12] <- G_hist[1:obsid_G]
 
@@ -118,7 +118,7 @@ placeholder <- function(G_hist,
     sigma2_eps <- ar_fit$var.pred
     gamma0 <- sigma2_eps / (1-phi^2)
 
-    n_fc <- (8 - t_now) - rtd_shift
+    n_fc <- (8 - t_now) - lastqu_shift
     n_real <- 12 - n_fc
 
     Sigma11 <- Sigma_AR1(n_fc, 2*n_fc, n_fc+2, phi)
@@ -133,7 +133,7 @@ placeholder <- function(G_hist,
     Sigma <- gamma0 * Sigma
 
     #extract last- and possibly current-year observations from G
-    obsid_G <- t_now + rtd_shift + 4 #"from the back"
+    obsid_G <- t_now + lastqu_shift + 4 #"from the back"
     rev_obsid_G <- 12 - obsid_G #"from the front"
     G <- rep(NA, 12)
     G[(rev_obsid_G+1):12] <- G_hist[1:obsid_G]
@@ -157,8 +157,61 @@ Sigma_AR1 <- function(nrow, startexp, endexp, phi){
     }) |> t()
 }
 
-run_weightopt <- function(real_time_data){
 
 
+fixedhor_forecasts <- function(real_time_dat,
+                               SPF_forecasts,
+                               rtd_match_data,
+                               current_year,
+                               current_quarter,
+                               fc_horizon,
+                               ar_order = 1){
+
+  DT <- `[`
+
+
+  rtd_date <- rtd_match_data |>
+    DT(origin_year == current_year & origin_quarter == current_quarter)
+  rtd_date <- rtd_date$closest_rtd_release
+
+  SPF_release <- SPF_forecasts |>
+    DT(forecast_year == current_year & forecast_quarter == current_quarter) |>
+    DT(order(target_year))
+
+  if(!nrow(SPF_release) == 2){
+    stop("Too many SPF forecasts after filtering")
+  }
+  SPF_current <- SPF_release$ens_fc[1]
+  SPF_next <- SPF_release$ens_fc[2]
+
+  rtd_current <- real_time_dat |>
+    DT(origin_year == lubridate::year(rtd_date) &
+         origin_month == lubridate::month(rtd_date) &
+         origin_day == lubridate::day(rtd_date)) |>
+    DT(order(target_year, target_quarter))
+
+  last_available_quarter <- rtd_current[!is.na(rgdp_growth), .(target_year, target_quarter)][.N]
+
+  #calculate lastqu_shift
+  lastqu_shift <- (last_available_quarter$target_year * 4 + last_available_quarter$target_quarter) -
+    (current_year * 4 + current_quarter)
+  if(lastqu_shift != -2){
+    warning("last available quarter is not the one two quarters prior,
+            something might be wrong here")
+  }
+
+  G_hist <- rtd_current$rgdp_growth[!is.na(rtd_current$rgdp_growth)]
+
+  weight_current <- estimate_weights(G_hist = G_hist,
+                                     p = ar_order,
+                                     t_now = current_quarter,
+                                     fc_horizon = fc_horizon,
+                                     lastqu_shift = lastqu_shift)
+
+  weight_next <- 1-weight_current
+
+  fh_forecast <- weight_current * SPF_current + weight_next * SPF_next
+
+  return(fh_forecast)
 }
 
