@@ -3,7 +3,6 @@
 #' Computes the weights for an optimal combination of the current-year
 #' and next-year forecasts
 #'
-#' @param G A Tx1 vector of quarterly observations
 #' @param Sigma A covariance matrix
 #' @param B1
 #' @param B2
@@ -11,22 +10,17 @@
 #'
 #' @return A (2x1) vector, first entry corresponds to the current-year forecast
 
-w_opt <- function(G,
-                  Sigma,
+w_opt <- function(Sigma,
                   B1,
                   B2,
                   An
 ){
   #dimension checks
-  if(!length(G) == 12){
-    stop(paste0("G has the wrong number of observations, expected 12, got ", (length(G))))
-  }
-  if(!(nrow(Sigma) == 12 & ncol(Sigma) == 12)){
-    stop(paste0("Sigma has the wrong dimension, expected 12x12"))
-  }
-  if(!length(B1) == 12){stop(paste0("B1 has the wrong dimension, expected 12x1"))}
-  if(!length(B2) == 12){stop(paste0("B2 has the wrong dimension, expected 12x1"))}
-  if(!length(An) == 12){stop(paste0("An has the wrong dimension, expected 12x1"))}
+  stopifnot(length(G) == 12)
+  stopifnot(all(dim(Sigma) == c(12,12)))
+  stopifnot(length(B1) == 12)
+  stopifnot(length(B2) == 12)
+  stopifnot(length(An) == 12)
 
   M <- t(An - B2)
   N <- t(B2 - B1)
@@ -67,6 +61,8 @@ w_calc <- function(t_now,
 
   weights <- w_opt(G,Sigma,B1,B2,An)
 
+  return(weights)
+
 }
 
 
@@ -75,7 +71,7 @@ w_calc <- function(t_now,
 #' Computes the weights for an optimal combination of the current-year
 #' and next-year forecasts
 #'
-#' @param G_hist data frame with quarterly observations
+#' @param G_hist vector with all previous quarterly observations
 #' @param p AR order assumed for DGP
 #' @param t_now current quarter, first quarter of the current year is coded as 1
 #' @param fc_horizon fixed horizon value, relative to current quarter
@@ -147,10 +143,10 @@ estimate_weights <- function(G_hist,
 
 #' Small helper function to construct covariance matrix for an AR(1) process
 #' @return A matrix
-Sigma_AR1 <- function(nrow, startexp, endexp, phi){
+Sigma_AR1 <- function(n_rows, startexp, endexp, phi){
 
   sapply(
-    seq_len(nrow),
+    seq_len(n_rows),
     function(id){
       exponent <- abs(seq((startexp - id)+1, (endexp - id)))
       return(phi^exponent)
