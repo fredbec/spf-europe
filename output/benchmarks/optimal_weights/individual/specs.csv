@@ -1,0 +1,4 @@
+key,value
+spec_id,individual
+data_input_primary,"spf_individual_annual.csv"
+ensemble_stat,
