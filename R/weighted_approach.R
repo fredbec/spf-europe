@@ -27,6 +27,8 @@ w_opt <- function(Sigma,
   numer <- - M %*% Sigma %*% t(N)
   denom <- N %*% Sigma %*% t(N)
 
+  if(abs(denom) < 1e-10) stop("denominator near zero")
+
   res <- numer/denom
 
   return(res)
