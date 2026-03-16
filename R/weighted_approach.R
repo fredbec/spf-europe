@@ -59,7 +59,7 @@ w_calc <- function(t_now,
   B1 <- c(0,0,0,0,seq(0.25, 1, by = 0.25),seq(0.75, 0.25, by = -0.25),0)
   B2 <- c(seq(0.25, 1, by = 0.25),seq(0.75, 0.25, by = -0.25),0,0,0,0,0)
 
-  weights <- w_opt(G,Sigma,B1,B2,An)
+  weights <- w_opt(Sigma,B1,B2,An)
 
   return(weights)
 
