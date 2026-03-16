@@ -289,7 +289,44 @@ run_fixed_hor_forecasts_from_settings <- function(settings){
       ar_order = ar_order
     )
   } else {
-  ##IMPLEMENT
+    #filter out forecasts
+    SPF_data <- SPF_data |>
+      DT(, count := .N, by = c("forecast_year", "forecast_quarter", "forecaster_id")) |>
+      DT(count == 2) |>
+      DT(, count := NULL) |>
+      split(by = "forecaster_id")
+
+    #get only combs for which forecaster id has submitted
+    fcid_combs <- lapply(SPF_data, function(fcdat){
+
+      fcdat_sub <- fcdat |>
+        DT(, .SD, .SDcols = c("forecast_year", "forecast_quarter")) |>
+        unique()|>
+        setnames(c("forecast_year", "forecast_quarter"), c("year", "quarter"))
+
+      combs_sub <- merge(combs, fcdat_sub, by = c("year", "quarter"), all = FALSE)
+      # expand for each combination
+      combs_sub <- combs_sub[, .(horizon = 1:7), by = .(year, quarter)] |>
+        DT(quarter+horizon <= 8)
+
+      return(combs_sub)
+    })
+
+    fh_results <- lapply(
+      SPF_data,
+      function(spf_dat_indiv){
+
+        fcid <- unique(spf_dat_indiv$forecaster_id)
+
+        run_fixed_hor_forecasts(
+          fcid_combs[[as.character(fcid)]],
+          SPF_data = spf_dat_indiv,
+          real_time_data = real_time_data,
+          rtd_match_data = spf_deadlines_match,
+          ar_order = ar_order
+        ) |>
+          DT(, forecaster_id := fcid)
+      })
   }
 
   return(list(filter_output = fh_results))
