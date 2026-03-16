@@ -230,7 +230,7 @@ process_spf <- function() {
 
     startrow <- which(spf_curr$TARGET_PERIOD == "GROWTH EXPECTATIONS; YEAR-ON-YEAR CHANGE IN REAL GDP")
     names(spf_curr) <- unlist(spf_curr[startrow + 1,])
-    spf_curr <- spf_curr[(startrow+2):1000,]
+    spf_curr <- spf_curr[(startrow+2):2000,]
     endrow <- which(spf_curr$TARGET_PERIOD == "EXPECTED UNEMPLOYMENT RATE; PERCENTAGE OF LABOUR FORCE")
     if(length(endrow)>0){ #after ~2015, unemployment rate is not in data anymore
       spf_curr <- spf_curr[1:(endrow-2),]
