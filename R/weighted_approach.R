@@ -16,7 +16,6 @@ w_opt <- function(Sigma,
                   An
 ){
   #dimension checks
-  stopifnot(length(G) == 12)
   stopifnot(all(dim(Sigma) == c(12,12)))
   stopifnot(length(B1) == 12)
   stopifnot(length(B2) == 12)
@@ -53,7 +52,7 @@ w_calc <- function(t_now,
   }
 
   pos_A <- (8 - (t_now + fc_horizon)) + 1
-  An <- rep(0, 12)
+  An <- numeric(12)
   An[(pos_A):(pos_A + fc_horizon - 1)] <- 4/fc_horizon
 
   B1 <- c(0,0,0,0,seq(0.25, 1, by = 0.25),seq(0.75, 0.25, by = -0.25),0)
@@ -112,21 +111,8 @@ estimate_weights <- function(G_hist,
     ar_fit <- ar(G_dm, aic = FALSE, order.max = p)
     phi <- ar_fit$ar[1]
     sigma2_eps <- ar_fit$var.pred
-    gamma0 <- sigma2_eps / (1-phi^2)
 
-    n_fc <- (8 - t_now) - lastqu_shift
-    n_real <- 12 - n_fc
-
-    Sigma11 <- Sigma_AR1(n_fc, 2*n_fc, n_fc+2, phi)
-    Sigma12 <- Sigma_AR1(n_fc, n_fc, n_real+n_fc, phi)
-    Sigma22 <- Sigma_AR1(n_real, 0, n_real, phi)
-
-    Sigma <- rbind(
-      cbind(Sigma11, Sigma12),
-      cbind(t(Sigma12), Sigma22)
-    )
-
-    Sigma <- gamma0 * Sigma
+    Sigma <- build_sigma_ar1(phi, sigma2_eps, t_now, lastqu_shift)
 
     #extract last- and possibly current-year observations from G
     obsid_G <- t_now + lastqu_shift + 4 #"from the back"
@@ -143,7 +129,7 @@ estimate_weights <- function(G_hist,
 
 #' Small helper function to construct covariance matrix for an AR(1) process
 #' @return A matrix
-Sigma_AR1 <- function(n_rows, startexp, endexp, phi){
+cov_ar1_block <- function(n_rows, startexp, endexp, phi){
 
   sapply(
     seq_len(n_rows),
@@ -151,6 +137,25 @@ Sigma_AR1 <- function(n_rows, startexp, endexp, phi){
       exponent <- abs(seq((startexp - id)+1, (endexp - id)))
       return(phi^exponent)
     }) |> t()
+}
+
+build_sigma_ar1 <- function(phi, sigma2_eps, t_now, lastqu_shift){
+
+  gamma0 <- sigma2_eps / (1 - phi^2)
+
+  n_fc  <- (8 - t_now) - lastqu_shift
+  n_real <- 12 - n_fc
+
+  Sigma11 <- cov_ar1_block(n_fc, 2*n_fc, n_fc+2, phi)
+  Sigma12 <- cov_ar1_block(n_fc, n_fc, n_real+n_fc, phi)
+  Sigma22 <- cov_ar1_block(n_real, 0, n_real, phi)
+
+  Sigma <- rbind(
+    cbind(Sigma11, Sigma12),
+    cbind(t(Sigma12), Sigma22)
+  )
+
+  gamma0 * Sigma
 }
 
 
@@ -174,8 +179,8 @@ fixedhor_forecasts <- function(real_time_dat,
     DT(forecast_year == current_year & forecast_quarter == current_quarter) |>
     DT(order(target_year))
 
-  if(!nrow(SPF_release) == 2){
-    stop("Too many SPF forecasts after filtering")
+  if(length(SPF_release$ens_fc) != 2){
+    stop("Expected exactly two SPF forecasts for current/next year")
   }
   SPF_current <- SPF_release$ens_fc[1]
   SPF_next <- SPF_release$ens_fc[2]
@@ -192,8 +197,7 @@ fixedhor_forecasts <- function(real_time_dat,
   lastqu_shift <- (last_available_quarter$target_year * 4 + last_available_quarter$target_quarter) -
     (current_year * 4 + current_quarter)
   if(lastqu_shift != -2){
-    warning("last available quarter is not the one two quarters prior,
-            something might be wrong here")
+    warning("Last available quarter is not two quarters prior; check data")
   }
 
   G_hist <- rtd_current$rgdp_growth[!is.na(rtd_current$rgdp_growth)]
