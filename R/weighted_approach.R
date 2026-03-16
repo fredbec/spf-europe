@@ -172,7 +172,6 @@ fixedhor_forecasts <- function(real_time_data,
 
   DT <- `[`
 
-
   rtd_date <- rtd_match_data |>
     DT(origin_year == current_year & origin_quarter == current_quarter)
   rtd_date <- rtd_date$closest_rtd_release
@@ -214,7 +213,8 @@ fixedhor_forecasts <- function(real_time_data,
 
   fh_forecast <- weight_current * SPF_current + weight_next * SPF_next
 
-  return(fh_forecast)
+  return(list(prediction = as.vector(fh_forecast),
+              weight_current = as.vector(weight_current)))
 }
 
 
@@ -244,8 +244,16 @@ run_fixed_hor_forecasts <-
       fc_horizon = fc_hor,
       ar_order = ar_order)
 
+    res_dat <- data.table(
+      origin_year = cyr,
+      origin_quarter = cqu,
+      horizon = fc_hor,
+      prediction = res$prediction,
+      weight_current = res$weight_current
+    )
 
-    res_fixed_hor[[i]] <- res
+
+    res_fixed_hor[[i]] <- res_dat
   }
   res_fixed_hor <- rbindlist(res_fixed_hor)
 
@@ -284,5 +292,5 @@ run_fixed_hor_forecasts_from_settings <- function(settings){
   ##IMPLEMENT
   }
 
-  return(fh_results)
+  return(list(filter_output = fh_results))
 }
