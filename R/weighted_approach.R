@@ -162,8 +162,8 @@ build_sigma_ar1 <- function(phi, sigma2_eps, t_now, lastqu_shift){
 
 
 
-fixedhor_forecasts <- function(real_time_dat,
-                               SPF_forecasts,
+fixedhor_forecasts <- function(real_time_data,
+                               SPF_data,
                                rtd_match_data,
                                current_year,
                                current_quarter,
@@ -177,7 +177,7 @@ fixedhor_forecasts <- function(real_time_dat,
     DT(origin_year == current_year & origin_quarter == current_quarter)
   rtd_date <- rtd_date$closest_rtd_release
 
-  SPF_release <- SPF_forecasts |>
+  SPF_release <- SPF_data |>
     DT(forecast_year == current_year & forecast_quarter == current_quarter) |>
     DT(order(target_year))
 
@@ -187,7 +187,7 @@ fixedhor_forecasts <- function(real_time_dat,
   SPF_current <- SPF_release$ens_fc[1]
   SPF_next <- SPF_release$ens_fc[2]
 
-  rtd_current <- real_time_dat |>
+  rtd_current <- real_time_data |>
     DT(origin_year == lubridate::year(rtd_date) &
          origin_month == lubridate::month(rtd_date) &
          origin_day == lubridate::day(rtd_date)) |>
@@ -217,3 +217,72 @@ fixedhor_forecasts <- function(real_time_dat,
   return(fh_forecast)
 }
 
+
+
+run_fixed_hor_forecasts <-
+  function(combs,
+           SPF_data,
+           real_time_data,
+           rtd_match_data,
+           ar_order){
+
+  res_fixed_hor <- vector(mode = "list", length = nrow(combs))
+  for(i in 1:nrow(combs)){
+
+    cissue <- combs[i,]
+
+    cqu <- cissue$quarter
+    cyr <- cissue$year
+    fc_hor <- cissue$horizon
+
+    res <- fixedhor_forecasts(
+      real_time_data = real_time_data,
+      SPF_data = SPF_data,
+      rtd_match_data = rtd_match_data,
+      current_year = cyr,
+      current_quarter = cqu,
+      fc_horizon = fc_hor,
+      ar_order = ar_order)
+
+
+    res_fixed_hor[[i]] <- res
+  }
+  res_fixed_hor <- rbindlist(res_fixed_hor)
+
+  return(res_fixed_hor)
+}
+
+
+run_fixed_hor_forecasts_from_settings <- function(settings){
+
+  SPF_data <- data.table::fread(here("data", "processed", settings$data_input_primary))
+
+  real_time_data <- fread(here("data", "processed", "revdatfull.csv"))
+
+  spf_deadlines_match <- fread(here("data", "helpers", "spf_deadlines_match_rtd.csv"))
+
+  ar_order <- settings$ar_order
+  #make a combination of all years and quarters, to loop over
+  quarters <- 1:4
+  years <- settings$start_year:settings$end_year
+  fc_horizons <- 1:7
+
+  combs <- CJ(year = years,
+              quarter = quarters,
+              horizon = fc_horizons) |>
+    DT(quarter+horizon <= 8)
+
+  if(is.null(SPF_data$forecaster_id)){
+    fh_results <- run_fixed_hor_forecasts(
+      combs = combs,
+      SPF_data = SPF_data,
+      real_time_data = real_time_data,
+      rtd_match_data = spf_deadlines_match,
+      ar_order = ar_order
+    )
+  } else {
+  ##IMPLEMENT
+  }
+
+  return(fh_results)
+}
