@@ -1,7 +1,7 @@
 write_outputs <- function(results, settings, base_path = "output/filter_spf") {
 
   #  Build directory path
-  spec_dir <- here("output", "filter_spf", settings$spec_id)
+  spec_dir <- here(base_path, settings$spec_id)
 
   # Define base filename prefix
   prefix <- sprintf("%03d", settings$run_id)
@@ -11,6 +11,8 @@ write_outputs <- function(results, settings, base_path = "output/filter_spf") {
   if (!is.null(results$filter_output)) {
     filtered_file <- here(spec_dir, paste0(prefix, "_run", ".csv"))
     data.table::fwrite(results$filter_output, filtered_file)
+  } else {
+    warning("no output")
   }
 
   # Write estimated parameters / metadata
