@@ -1,0 +1,4 @@
+key,value
+spec_id,consensus_median
+data_input_primary,"spf_median_forecast.csv"
+ensemble_stat,median

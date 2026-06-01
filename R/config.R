@@ -1,12 +1,12 @@
-read_spec <- function(spec_id) {
-  path <- here("output", "filter_spf", spec_id, "specs.csv")
+read_spec <- function(spec_id, loc = "filter_spf") {
+  path <- here("output", loc, spec_id, "specs.csv")
   stopifnot(file.exists(path))
   spec <- read.csv(path, stringsAsFactors = FALSE)
   as.list(setNames(spec$value, spec$key))
 }
 
-read_run <- function(spec_id, run_id) {
-  path <- here("output", "filter_spf", spec_id, "runs.csv")
+read_run <- function(spec_id, run_id,loc = "filter_spf") {
+  path <- here("output", loc, spec_id, "runs.csv")
   runs <- read.csv(path, stringsAsFactors = FALSE)
   run <- runs[runs$run_id == run_id, ]
   stopifnot(nrow(run) == 1)
@@ -18,3 +18,4 @@ merge_reformat_settings <- function(spec, run) {
     lapply(na_to_null)
 
 }
+na_to_null <- function(x) if (is.na(x)) NULL else x
