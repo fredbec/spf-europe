@@ -287,7 +287,10 @@ run_fixed_hor_forecasts_from_settings <- function(settings){
       real_time_data = real_time_data,
       rtd_match_data = spf_deadlines_match,
       ar_order = ar_order
-    )
+    ) |>
+      DT(, target_year := origin_year + (( origin_quarter + horizon - 1) %/% 4 )) |>
+      DT(, target_quarter := (origin_quarter + horizon) %% 4 ) |>
+      DT(, target_quarter := ifelse(target_quarter == 0, 4, target_quarter))
   } else {
     #filter out forecasts
     SPF_data <- SPF_data |>
@@ -326,7 +329,11 @@ run_fixed_hor_forecasts_from_settings <- function(settings){
           ar_order = ar_order
         ) |>
           DT(, forecaster_id := fcid)
-      })
+      }) |>
+      rbindlist() |>
+      DT(, target_year := origin_year + (( origin_quarter + horizon - 1) %/% 4 )) |>
+      DT(, target_quarter := (origin_quarter + horizon) %% 4 ) |>
+      DT(, target_quarter := ifelse(target_quarter == 0, 4, target_quarter))
   }
 
   return(list(filter_output = fh_results))
