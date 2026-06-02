@@ -274,7 +274,7 @@ run_fixed_hor_forecasts_from_settings <- function(settings){
   #make a combination of all years and quarters, to loop over
   quarters <- 1:4
   years <- settings$start_year:settings$end_year
-  fc_horizons <- 1:7
+  fc_horizons <- 0:7
 
   combs <- CJ(year = years,
               quarter = quarters,
