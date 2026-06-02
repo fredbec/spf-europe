@@ -38,7 +38,8 @@ w_opt <- function(Sigma,
 w_calc <- function(t_now,
                    fc_horizon,
                    G,
-                   Sigma
+                   Sigma,
+                   n_lag = 1
 ){
   #dimension checks
   if(fc_horizon != as.integer(fc_horizon)){stop("fc_horizon has to be integer")}
@@ -55,7 +56,7 @@ w_calc <- function(t_now,
 
   pos_A <- (8 - (t_now + fc_horizon)) + 1
   An <- numeric(12)
-  An[(pos_A):(pos_A + fc_horizon - 1)] <- 4/fc_horizon
+  An[(pos_A):(pos_A + n_lag - 1)] <- 4/n_lag
 
   B1 <- c(0,0,0,0,seq(0.25, 1, by = 0.25),seq(0.75, 0.25, by = -0.25),0)
   B2 <- c(seq(0.25, 1, by = 0.25),seq(0.75, 0.25, by = -0.25),0,0,0,0,0)
