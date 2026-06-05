@@ -25,13 +25,31 @@ SPF_panel <- readRDS(
 SPF_panel <- SPF_panel$SPF_panel_eval
 
 
+# Optimal weighting (Knüppel)
+SPF_weight_aux <- readRDS(
+  here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_weight.rds")
+)
+SPF_weight <- SPF
+
+SPF_weight$evaluation_data_cy <- SPF_weight$evaluation_data_cy %>%
+  select(-spf_h0, -spf_h1, -spf_h2, -spf_h3, -spf_h4) %>%
+  left_join(
+    SPF_weight_aux %>%
+      select(
+        target_year,
+        target_quarter,
+        spf_h0, spf_h1, spf_h2, spf_h3, spf_h4
+      ),
+    by = c("target_year", "target_quarter")
+  )
+
 
 ### Quick plots
 
 ## Plot filtered values using current versus current and next year SPF forecasts
 
 # Merge CY and NY forecasts into one table with gdp_growth
-plot_data <- SPF$evaluation_data_cy %>%
+plot_data <- SPFt$evaluation_data_cy %>% # SPF_weight$evaluation_data_cy for Knüppel (legend: spf_cy)
   filter(ref_period >= as.yearqtr("2000 Q1", format = "%Y Q%q"),
          ref_period <= as.yearqtr("2019 Q4", format = "%Y Q%q")) %>%
   select(ref_period, gdp_growth, spf_cy = spf_h0) %>%
@@ -300,6 +318,31 @@ RMSE_quarterly_panel_median_cons <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_benc
                                                                SPFalternative = SPF_alt)
 
 
+# Optimal weighting (Knüppel)
+SPF_weight_aux <- readRDS(
+  here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_weight.rds")
+)
+SPF_weight <- SPF_mean
+
+SPF_weight$evaluation_data_ny <- SPF_weight$evaluation_data_ny %>%
+  select(-spf_h0, -spf_h1, -spf_h2, -spf_h3, -spf_h4) %>%
+  left_join(
+    SPF_weight_aux %>%
+      select(
+        target_year,
+        target_quarter,
+        spf_h0, spf_h1, spf_h2, spf_h3, spf_h4
+      ),
+    by = c("target_year", "target_quarter")
+  )
+
+RMSE_quarterly_median_weight <- SPF_RMSE_DM_Test_quarterly(SPF_cons, AR_bench_quarterly,
+                                                           DropPeriod = dropYears,
+                                                           EvalPeriod = evalPeriod,
+                                                           SPFalternative = SPF_weight$evaluation_data_ny)
+
+
+
 ### Forecasting performance over extended time period
 evalPeriod <- cbind(2002,2024)
 
@@ -486,6 +529,8 @@ RMSE_quarterly_panel_median_cons$RMSE
 # Root Mean Squared Errors of current and next year versus current year forecasts
 RMSE_quarterly_median_ny_cy  # h = 4 always needs next year forecasts
 
+# Root Mean Squared Errors of next year versus optimal weights
+RMSE_quarterly_median_weight
 
 
 ### RMSE and DM test of yearly SPF forecasts (additional results probably not reported)

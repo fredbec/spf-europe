@@ -297,3 +297,33 @@ data_function_spf <- function(ConsensusMedian = TRUE, SPFPanel = FALSE, FixedHor
 
 }
 
+
+
+
+data_function_spf_weight <- function(Spec = 2 ) {
+
+  ### Read in and clean consensus
+  if (Spec == 1) {
+    IndivSPFall <- read.csv("output/benchmarks/optimal_weights/consensus_median/001_run.csv")
+  } else if (Spec == 2) {
+    IndivSPFall <- read.csv("output/benchmarks/optimal_weights/consensus_median/002_run.csv")
+  }
+
+  # Construct real-time data structure
+  spf <- IndivSPFall %>%
+    filter(horizon <= 4) %>%
+    mutate(
+      ref_period = paste(target_year, paste0("Q", target_quarter)),
+      horizon_var = paste0("spf_h", horizon)
+    ) %>%
+    select(target_year, target_quarter, ref_period,
+           horizon_var, prediction) %>%
+    pivot_wider(
+      names_from = horizon_var,
+      values_from = prediction
+    ) %>%
+    arrange(target_year, target_quarter)
+
+}
+
+

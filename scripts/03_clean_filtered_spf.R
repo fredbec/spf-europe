@@ -149,8 +149,6 @@ write.csv(
 
 
 
-
-
 ### Forecaster panel using fixed-event and fixed-horizon forecasts
 SPF_panel <- data_function_spf(SPFPanel = TRUE, FixedHorizon = TRUE)
 
@@ -175,3 +173,11 @@ write.csv(
   file = here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_FH_panel_clean.csv"),
   row.names = FALSE
 )
+
+
+
+### Consensus forecasts using optimal weighting (Knüppel)
+SPF_weight <- data_function_spf_weight(Spec = 2)
+
+# Save data sets
+saveRDS(SPF_weight, file = here("output","filter_spf","spf_consensus_and_panel_clean_version","SPF_weight.rds"))
