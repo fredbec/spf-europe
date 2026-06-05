@@ -49,7 +49,7 @@ SPF_weight$evaluation_data_cy <- SPF_weight$evaluation_data_cy %>%
 ## Plot filtered values using current versus current and next year SPF forecasts
 
 # Merge CY and NY forecasts into one table with gdp_growth
-plot_data <- SPFt$evaluation_data_cy %>% # SPF_weight$evaluation_data_cy for Knüppel (legend: spf_cy)
+plot_data <- SPF$evaluation_data_cy %>% # SPF_weight$evaluation_data_cy for Knüppel (legend: spf_cy)
   filter(ref_period >= as.yearqtr("2000 Q1", format = "%Y Q%q"),
          ref_period <= as.yearqtr("2019 Q4", format = "%Y Q%q")) %>%
   select(ref_period, gdp_growth, spf_cy = spf_h0) %>%
