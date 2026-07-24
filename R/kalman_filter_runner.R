@@ -224,7 +224,7 @@ filter_dat <- function(current_quarter,
         GDP_check = cbind(GDP_check,NaN)
         for (i in 8:dim(GDP_check)[1]) {
           GDP_check[i,3] = 1/16 * (GDP_check[i,1] + 2*GDP_check[i-1,1] + 3*GDP_check[i-2,1] + 4*GDP_check[i-3,1] +
-                                + 3*GDP_check[i-4,1] +  + 2*GDP_check[i-5,1] + 2*GDP_check[i-6,1])
+                                + 3*GDP_check[i-4,1] + 2*GDP_check[i-5,1] + 1*GDP_check[i-6,1])
 
         }
         ApprErr <- GDP_check[,2] - GDP_check[,3]
