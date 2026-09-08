@@ -439,7 +439,10 @@ process_ip <- function(){
     DT(, target_month := as.numeric(sub(".*-", "", target_period))) |>
     DT(, target_period := NULL) |>
     DT(, target_quarter := ceiling(target_month/3)) |>
-    DT(, value := as.numeric(value)) |>
+    DT(, value := as.numeric(value))
+
+  ipeu_quarterly <- ipeu |>
+    data.table::copy() |>
     DT(, ip := mean(value), by = c("target_year", "target_quarter")) |>
     DT(, .SD, .SDcols = c("target_year", "target_quarter", "ip")) |>
     unique() |>
@@ -447,8 +450,18 @@ process_ip <- function(){
     DT(, ip := NULL) |>
     setnames("growth_rate", "ip")
 
+  ipeu_monthly <- ipeu |>
+    data.table::copy() |>
+    setnames("value", "ip") |>
+    DT(, .SD, .SDcols = c("target_year", "target_month", "ip")) |>
+    unique() |>
+    DT(, growth_rate := (ip - shift(ip)) / shift(ip) * 100) |>
+    DT(, ip := NULL) |>
+    setnames("growth_rate", "ip")
 
-  data.table::fwrite(ipeu, here("data", "processed", "ip_consolidated.csv"))
+
+  data.table::fwrite(ipeu_quarterly, here("data", "processed", "ip_consolidated.csv"))
+  data.table::fwrite(ipeu_monthly, here("data", "processed", "ip_consolidated_monthly.csv"))
 }
 
 process_ip()
