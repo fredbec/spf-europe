@@ -93,14 +93,28 @@ process_rtd <- function() {
     DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
        by = .(origin_year, origin_month, origin_day)) |>
     DT(!is.na(rgdp_growth)) |>
-    DT(, c("number") := NULL)|>
-    DT(origin_year >= 2015) #potentially change later
+    DT(, rgdp_growth_ann := ifelse(
+      target_quarter == 4,
+      ((rgdp + shift(rgdp,1) + shift(rgdp,2) + shift(rgdp,3)) /
+         (shift(rgdp,4) + shift(rgdp,5) + shift(rgdp,6) + shift(rgdp,7)) - 1) * 100,
+      NA_real_
+    ),
+    by = .(origin_year, origin_month)) |>
+    DT(, c("number") := NULL) |>
+    DT(origin_year >= 2015) #remove overlap with pre14
 
   rtd_pre14 <- rtd_pre14 |>
     setorder(origin_year, origin_month, target_year, target_quarter) |>
     DT(, rgdp_growth := ((rgdp / shift(rgdp,1))^4 - 1) * 100,
        by = .(origin_year, origin_month)) |>
     DT(!is.na(rgdp_growth)) |>
+    DT(, rgdp_growth_ann := ifelse(
+      target_quarter == 4,
+      ((rgdp + shift(rgdp,1) + shift(rgdp,2) + shift(rgdp,3)) /
+         (shift(rgdp,4) + shift(rgdp,5) + shift(rgdp,6) + shift(rgdp,7)) - 1) * 100,
+      NA_real_
+    ),
+    by = .(origin_year, origin_month)) |>
     DT(, origin_day := ifelse(origin_month == 2, 28,
                               ifelse(origin_month %in% c(1,3,5,7,8,10,12), 31,
                                      30)))
@@ -149,25 +163,17 @@ process_rtd <- function() {
   #fill in missing values by carrying forward the last vintage
   rtd_full[, rgdp_growth := zoo::na.locf(rgdp_growth, na.rm = FALSE),
            by = .(target_year, target_quarter)]
-
+  rtd_full[, rgdp_growth_ann := zoo::na.locf(rgdp_growth_ann, na.rm = FALSE),
+           by = .(target_year, target_quarter)]
   rtd_full[, rgdp := zoo::na.locf(rgdp, na.rm = FALSE),
            by = .(target_year, target_quarter)]
 
   rtd <- rtd_full |>
     DT(target_year <= origin_year) |>
     DT(, rgdp_growth := ifelse(is.na(rgdp_growth), NaN, rgdp_growth)) |>
-    setorder(origin_year, origin_month, origin_day, target_year, target_quarter)
-
-
-  rtd <- rtd |>
-    DT(, rgdp_growth_ann := ifelse(
-      target_quarter == 4,
-      ((rgdp + shift(rgdp,1) + shift(rgdp,2) + shift(rgdp,3)) /
-         (shift(rgdp,4) + shift(rgdp,5) + shift(rgdp,6) + shift(rgdp,7)) - 1) * 100,
-      NA_real_
-    ),
-    by = .(origin_year, origin_month)) |>
-    DT(, rgdp := NULL)
+    setorder(origin_year, origin_month, origin_day, target_year, target_quarter) |>
+    DT(, rgdp := NULL) |>
+    DT(, .SD, .SDcols = c("origin_year", "origin_month", "origin_day", "target_quarter", "target_year", "rgdp_growth", "imputed", "rgdp_growth_ann"))
 
 
   data.table::fwrite(rtd, here("data", "processed", "revdatfull.csv"))
