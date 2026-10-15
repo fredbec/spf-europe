@@ -100,13 +100,13 @@ filter_dat <- function(current_quarter,
   DT <- `[`
 
 
-
   #get current issue
   current_issue <- get_current_issue(shift = rtd_shift,
                                      rtd_match_data = rtd_match_data,
                                      current_quarter = current_quarter,
                                      current_year = current_year)
 
+  approx_errors <- fread(here("data", "processed", "approximation_errors.csv"))
   ###read in real time data
   #currently implemented: expanding window (use all historic data)
   #could also implement a rolling window approach
@@ -199,49 +199,18 @@ filter_dat <- function(current_quarter,
 
     # Calibration of approximation error to observed data (Code should be improved)
     if (is.null(approx_err)) {
-      GDP_check = cbind(data_filter_cy$rgdp_growth,data_filter_cy$rgdp_growth_ann)
+        cissue_approx_errors <- approx_errors |>
+          DT(origin_year == lubridate::year(current_issue) & origin_month == lubridate::month(current_issue) & lubridate::day(current_issue))
+        max_ind <- max(which(!is.na(cissue_approx_errors$sigma_err)))
 
-      if (all(is.na(GDP_check[,2]))) {
-        approx_err = 0.1
+        approx_err <- cissue_approx_errors$sigma_err[max_ind]
 
-        # Could be an input to the function
-        approx_err_fh <- approx_err
+        approx_err_fh <- cissue_approx_errors$sigma_qonq_err[max_ind]
 
-        print("Warning: No annual growth rates!")
-      } else {
-        # Prepare actual GDP data for comparison
-        last_valid <- max(max(which(!is.na(GDP_check[,2]))), dim(GDP_check)[1])
-        GDP_check <- GDP_check[1:last_valid, ]
-
-        n <- nrow(GDP_check)
-        rem <- n %% 4
-
-        if (rem != 0) {
-          GDP_check <- GDP_check[(rem + 1):n, ]
-        }
-
-        # Calibration of yearly aggregation error
-        GDP_check = cbind(GDP_check,NaN)
-        for (i in 8:dim(GDP_check)[1]) {
-          GDP_check[i,3] = 1/16 * (GDP_check[i,1] + 2*GDP_check[i-1,1] + 3*GDP_check[i-2,1] + 4*GDP_check[i-3,1] +
-                                + 3*GDP_check[i-4,1] + 2*GDP_check[i-5,1] + 1*GDP_check[i-6,1])
-
-        }
-        ApprErr <- GDP_check[,2] - GDP_check[,3]
-        approx_err <- sd(ApprErr, na.rm = TRUE)
-
-        # Calibration of fixed-horizon aggregation error
-        GDP_check <- cbind(GDP_check,NaN)
-        g <- GDP_check[,1]
-        GDP_check[,4] <- (g + lag(g,1) + lag(g,2) + lag(g,3))/4
-        ApprErrFH <- GDP_check[,2] - GDP_check[,4]
-        approx_err_fh <- sd(ApprErrFH, na.rm = TRUE)
-      }
     } else {
       # Could be an input to the function
       approx_err_fh <- approx_err
   }
-
     if(!is.null(SPF_fixedhorizon)){
       fixedhorizon_fc <- SPF_fixedhorizon |>
         DT(forecast_year == current_year & forecast_quarter == current_quarter)
