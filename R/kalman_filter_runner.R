@@ -84,8 +84,6 @@ filter_dat <- function(current_quarter,
                        SPF_data,
                        real_time_data,
                        SPF_fixedhorizon,
-                       SPF_data_US = NULL,
-                       release_US_SPF = "latest",
                        est_gamma = FALSE,
                        rtd_issue = c("latest_vintage", "rtd"),
                        rtd_shift = 0,
@@ -139,143 +137,48 @@ filter_dat <- function(current_quarter,
        "spf_fc" := spf_fcs) |>
     DT(is.na(spf_fc), spf_fc := NaN)
 
-  if(!is.null(SPF_data_US)){
-
-    if(release_US_SPF == "latest"){
-      cpreds_zero <- SPF_data_US |>
-        DT(,step_ahead := (target_quarter - origin_quarter) + (target_year - origin_year)*4) |>
-        DT(step_ahead == 0 & origin_year <= current_year) |>
-        DT(, prev := ifelse(origin_year == current_year & origin_quarter >= current_quarter, 1, 0)) |>
-        DT(prev == 0) |>
-        DT(, c("prev", "step_ahead", "origin_year", "origin_quarter") := NULL) |>
-        setnames("prediction", "rgdp_growth_usspf")
-
-      cpreds_forward <- SPF_data_US |>
-        DT(origin_year == current_year & origin_quarter == current_quarter)|>
-        DT(, c("step_ahead", "origin_year", "origin_quarter") := NULL) |>
-        setnames("prediction", "rgdp_growth_usspf")
-
-      cpreds_current <- rbind(cpreds_zero, cpreds_forward)
-
-      data_filter_cy <- cpreds_current[data_filter_cy, on = c("target_year", "target_quarter")]
-
-      data_filter_cyandny <- cpreds_current[data_filter_cyandny, on = c("target_year", "target_quarter")] |>
-        DT(, rgdp_growth_usspf := ifelse(is.na(rgdp_growth_usspf), NaN, rgdp_growth_usspf))
-    } else if (is.numeric(release_US_SPF)){
-
-      if(release_US_SPF>3){
-
-        stop("release_US_SPF must be 3 or smaller, longer horizons currently not available")
 
 
-      }
+  # approximation error to observed data
+  if (is.null(approx_err)) {
+      cissue_approx_errors <- approx_errors |>
+        DT(origin_year == lubridate::year(current_issue) & origin_month == lubridate::month(current_issue) & lubridate::day(current_issue))
+      max_ind <- max(which(!is.na(cissue_approx_errors$sigma_err)))
 
-      #this is for the IP data
-      if(release_US_SPF < 0){
-        shift_cqu <- release_US_SPF + 1
-      } else {
-        shift_cqu <- 0
-      }
-      cpreds_zero <- SPF_data_US |>
-        DT(,step_ahead := (target_quarter - origin_quarter) + (target_year - origin_year)*4) |>
-        DT(step_ahead == release_US_SPF & origin_year <= current_year) |>
-        DT(, prev := ifelse(origin_year == current_year & origin_quarter > (current_quarter + shift_cqu), 1, 0)) |> #important that here we have origin_quarter > current_quarter and not origin_quarter >=  current_quarter (as above)
-        DT(prev == 0) |>
-        DT(, c("prev", "step_ahead", "origin_year", "origin_quarter") := NULL) |>
-        setnames("prediction", "rgdp_growth_usspf")
+      approx_err <- cissue_approx_errors$sigma_err[max_ind]
 
-      data_filter_cy <- cpreds_zero[data_filter_cy, on = c("target_year", "target_quarter")] |>
-        DT(, rgdp_growth_usspf := ifelse(is.na(rgdp_growth_usspf), NaN, rgdp_growth_usspf))
+      approx_err_fh <- cissue_approx_errors$sigma_qonq_err[max_ind]
 
-      data_filter_cyandny <- cpreds_zero[data_filter_cyandny, on = c("target_year", "target_quarter")] |>
-        DT(, rgdp_growth_usspf := ifelse(is.na(rgdp_growth_usspf), NaN, rgdp_growth_usspf))
-
-    } else {
-    stop("release_US_SPF must either be 'latest' or numeric")
-  }
-  }
-
-  if(is.null(SPF_data_US)){
-
-    # Calibration of approximation error to observed data (Code should be improved)
-    if (is.null(approx_err)) {
-        cissue_approx_errors <- approx_errors |>
-          DT(origin_year == lubridate::year(current_issue) & origin_month == lubridate::month(current_issue) & lubridate::day(current_issue))
-        max_ind <- max(which(!is.na(cissue_approx_errors$sigma_err)))
-
-        approx_err <- cissue_approx_errors$sigma_err[max_ind]
-
-        approx_err_fh <- cissue_approx_errors$sigma_qonq_err[max_ind]
-
-    } else {
-      # Could be an input to the function
-      approx_err_fh <- approx_err
-  }
-    if(!is.null(SPF_fixedhorizon)){
-      fixedhorizon_fc <- SPF_fixedhorizon |>
-        DT(forecast_year == current_year & forecast_quarter == current_quarter)
-
-      fixedhorizon_fc <- fixedhorizon_fc$ens_fc
-
-      quarterID <- ((current_quarter + 2 - 1) %% 4) + 1
-      cyres <- SPF_filter_fe_fh(rgdp = data_filter_cy$rgdp_growth,
-                                spf = data_filter_cy$spf_fc,
-                                spfFixHor = fixedhorizon_fc,
-                                QuarterID = quarterID,
-                                approxerr = c(approx_err,approx_err_fh) )
-      spf_filter_vals_cy <- cyres$SPF_filtered
-      cyandnyres <- SPF_filter_fe_fh(rgdp = data_filter_cyandny$rgdp_growth,
-                                     spf = data_filter_cyandny$spf_fc,
-                                     spfFixHor = fixedhorizon_fc,
-                                     QuarterID = quarterID,
-                                     approxerr = c(approx_err,approx_err_fh) )
-      spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
-
-    } else {
-      cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, approx_err = approx_err)
-      spf_filter_vals_cy <- cyres$SPF_filtered
-      cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, approx_err = approx_err)
-      spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
-    }
   } else {
-    #following code is a bit adhoc, since there was an error in the instance 2018Q1
-    #with the Cholesky decomposition
-    if(!est_gamma){
-      cyres <- tryCatch(
-        {
-          SPF_filter_us(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
-        },
-        error = function(e){
-          message(paste0(current_year, "Q", current_quarter))
+    # Could be an input to the function
+    approx_err_fh <- approx_err
+  }
 
-          data_filter_cy[, 3] <- data_filter_cy[, 3] - rnorm(1, sd = 0.0001)
-          SPF_filter_us(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
-        }
-      )
-      spf_filter_vals_cy <- cyres$SPF_filtered
-      #spf_filter_vals_cyandny <- spf_filter_vals_cy
-      cyandnyres <- SPF_filter_us(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, data_filter_cyandny$rgdp_growth_usspf)
-      spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
-    } else {
+  if (!is.null(SPF_fixedhorizon)){
+    fixedhorizon_fc <- SPF_fixedhorizon |>
+      DT(forecast_year == current_year & forecast_quarter == current_quarter)
 
-      cyres <- tryCatch(
-        {
-          SPF_filter_us_gamma(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
-        },
-        error = function(e){
-          message(paste0(current_year, "Q", current_quarter))
+    fixedhorizon_fc <- fixedhorizon_fc$ens_fc
 
-          data_filter_cy[, 3] <- data_filter_cy[, 3] - rnorm(1, sd = 0.0001)
-          SPF_filter_us_gamma(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, data_filter_cy$rgdp_growth_usspf)
-        }
-      )
-      spf_filter_vals_cy <- cyres$SPF_filtered
-      #spf_filter_vals_cyandny <- spf_filter_vals_cy
-      cyandnyres <- SPF_filter_us_gamma(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, data_filter_cyandny$rgdp_growth_usspf)
-      spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+    quarterID <- ((current_quarter + 2 - 1) %% 4) + 1
+    cyres <- SPF_filter_fe_fh(rgdp = data_filter_cy$rgdp_growth,
+                              spf = data_filter_cy$spf_fc,
+                              spfFixHor = fixedhorizon_fc,
+                              QuarterID = quarterID,
+                              approxerr = c(approx_err,approx_err_fh) )
+    spf_filter_vals_cy <- cyres$SPF_filtered
+    cyandnyres <- SPF_filter_fe_fh(rgdp = data_filter_cyandny$rgdp_growth,
+                                   spf = data_filter_cyandny$spf_fc,
+                                   spfFixHor = fixedhorizon_fc,
+                                   QuarterID = quarterID,
+                                   approxerr = c(approx_err,approx_err_fh) )
+    spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
 
-    }
-
+  } else {
+    cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, approx_err = approx_err)
+    spf_filter_vals_cy <- cyres$SPF_filtered
+    cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, approx_err = approx_err)
+    spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
   }
 
   #make spf_filter_dat (take target columns from data_filter_cyandny)
@@ -296,8 +199,6 @@ run_filter <- function(combs,
                        SPF_data,
                        real_time_data,
                        SPF_fixedhorizon,
-                       SPF_data_US,
-                       release_US_SPF = "latest",
                        est_gamma,
                        rtd_issue  ="latest_vintage",
                        rtd_shift,
@@ -320,8 +221,6 @@ run_filter <- function(combs,
                       SPF_data = SPF_data,
                       real_time_data = real_time_data,
                       SPF_fixedhorizon = SPF_fixedhorizon,
-                      SPF_data_US = SPF_data_US,
-                      release_US_SPF = release_US_SPF,
                       est_gamma = est_gamma,
                       rtd_issue = rtd_issue,
                       rtd_shift = rtd_shift,
@@ -352,15 +251,8 @@ run_filter_from_settings <- function(settings){
   SPF_data <- data.table::fread(here("data", "processed", settings$data_input_primary))
 
   if(!is.null(settings$data_input_secondary)){
-    if(grepl("fixedhorizon", settings$spec_id)){
-      SPF_fixedhorizon <- data.table::fread(here("data", "processed", settings$data_input_secondary))
-      SPF_data_US <- NULL
-    } else {
-      SPF_data_US <- data.table::fread(here("data", "processed", settings$data_input_secondary))
-      SPF_fixedhorizon <- NULL
-    }
+    SPF_fixedhorizon <- data.table::fread(here("data", "processed", settings$data_input_secondary))
   } else {
-    SPF_data_US <- NULL
     SPF_fixedhorizon <- NULL
   }
 
@@ -385,8 +277,6 @@ run_filter_from_settings <- function(settings){
       SPF_data = SPF_data,
       real_time_data = real_time_data,
       SPF_fixedhorizon = SPF_fixedhorizon,
-      SPF_data_US = SPF_data_US,
-      release_US_SPF = settings$release_US_SPF,
       est_gamma = settings$gamma_est,
       rtd_issue = "latest_vintage",
       rtd_shift = settings$rtd_shift,
