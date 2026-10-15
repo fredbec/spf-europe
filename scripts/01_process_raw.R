@@ -173,7 +173,7 @@ process_rtd <- function() {
     DT(, rgdp_growth := ifelse(is.na(rgdp_growth), NaN, rgdp_growth)) |>
     setorder(origin_year, origin_month, origin_day, target_year, target_quarter) |>
     DT(, rgdp := NULL) |>
-    DT(, .SD, .SDcols = c("origin_year", "origin_month", "origin_day", "target_quarter", "target_year", "rgdp_growth", "imputed", "rgdp_growth_annual"))
+    DT(, .SD, .SDcols = c("origin_year", "origin_month", "origin_day", "target_quarter", "target_year", "rgdp_growth", "imputed", "rgdp_growth_ann"))
 
 
   data.table::fwrite(rtd, here("data", "processed", "revdatfull.csv"))
