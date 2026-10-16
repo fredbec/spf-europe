@@ -45,7 +45,42 @@ calc_approx_errors <- function(rtd_release){
 
 }
 
+
+
 approx_errors <- lapply(real_time_data, calc_approx_errors) |>
   rbindlist()
 
 data.table::fwrite(approx_errors,here("data", "processed", "approximation_errors.csv"))
+
+
+ipdata_m <- data.table::fread(here("data", "processed", "ip_consolidated_monthly.csv")) |>
+  setnames("ip", "ip_m") |>
+  DT(, target_quarter := ifelse(target_month %% 3 == 0, target_month %/% 3, NA))
+
+ipdata_q <- data.table::fread(here("data", "processed", "ip_consolidated.csv")) |>
+  setnames("ip", "ip_q")
+
+ipdata_all <- ipdata_q[ipdata_m, on = c("target_year", "target_quarter")]
+
+inds_q <- which(!is.na(ipdata_all$ip_q))
+inds_q <- inds_q[inds_q>4]
+
+ipdata_all$approx_quarterly <- as.numeric(NA)
+ipdata_all$approx_error <- as.numeric(NA)
+ipdata_all$sigma_err <- as.numeric(NA)
+
+for(ind in inds_q){
+  q_val <- ipdata_all$ip_q[ind]
+  m_vals <- ipdata_all$ip_m[(ind-4):ind]
+  tri_weights <- 1/3 * c(1:3,2:1)
+
+  ipdata_all$approx_quarterly[ind] <- sum(tri_weights * m_vals)
+  ipdata_all$approx_error[ind] <-
+    q_val - ipdata_all$approx_quarterly[ind]
+  ipdata_all$sigma_err[ind] <- sd(ipdata_all$approx_error[1:ind], na.rm = TRUE)
+}
+
+
+
+data.table::fwrite(approx_errors,here("data", "processed", "approximation_errors_ip.csv"))
+
