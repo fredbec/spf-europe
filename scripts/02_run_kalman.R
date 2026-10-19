@@ -7,6 +7,7 @@ source(here("R", "config.R"))
 source(here("R", "io.R"))
 source(here("R", "kalman_filter_core", "kalman_filter.R"))
 source(here("R", "kalman_filter_core", "kalman_filter_fe_fh.R"))
+source(here("R", "kalman_filter_core", "kalman_filter_mean_var_monthly.R"))
 
 
 for(spec_id in c("consensus_median", "consensus_mean", "individual",
