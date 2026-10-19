@@ -187,6 +187,7 @@ kalman_filter = function(y, rw_sd, approx_err, smooth = FALSE) {
 #' @export
 kalman_smoother = function(states_filtered) {
 
+  n_state <- 7
   ###### State space representation
 
   ### Measurement equation
@@ -208,7 +209,9 @@ kalman_smoother = function(states_filtered) {
   # Initialize Kalman smoother recursion and matrix for smoothed x
   TT <- nrow(x_fc)
   r_t <- rep(0, 7);                                # Auxiliary variable (A9)
+  N_t <- matrix(0, nrow = n_state, ncol = n_state);                    # Auxiliary matrix, for the variance
   x_smoothed <- matrix(data=NA,nrow=TT,ncol=7)     # Smoothed states
+  x_smoothed_var <- array(rep(NA, n_state*n_state*TT), dim=c(n_state, n_state, TT))  # Smoothed state variances
 
 
   # Kalman smoother
@@ -234,12 +237,25 @@ kalman_smoother = function(states_filtered) {
       r_t <- t(Lt_aux) %*% r_t
     }
 
+    # Auxiliary matrix for the variance
+    if (any(ind_nan)) {
+      N_t <- t(C[ind_nan, ,drop = FALSE]) %*%
+        chol2inv(chol(y_fc_var_aux[ind_nan, ind_nan, drop = FALSE])) %*%
+        C[ind_nan, ,drop = FALSE] +
+        t(Lt_aux) %*% N_t %*% Lt_aux
+    } else {
+      N_t <- t(Lt_aux) %*% N_t %*% Lt_aux
+    }
+
     # Smoothed state mean
     x_smoothed[t,] <- t(x_fc_aux + x_fc_var_aux %*% r_t)  # (A11)
 
+    # Smoothed state variance
+    x_smoothed_var[, ,t] <- x_fc_var_aux - x_fc_var_aux %*% N_t %*% x_fc_var_aux
+
   }
 
-  return(x_smoothed)
+  return(list(x_smoothed = x_smoothed, x_smoothed_var = x_smoothed_var))
 }
 
 
@@ -329,8 +345,12 @@ SPF_filter <- function(rgdp, spf, approx_err = 0.01) {
                   upper = Inf)
 
   # Given the estimate 'est_sd', filter and smooth states, i.e., implied SPF
-  filtered_states <- kalman_filter(y, rw_sd = est_sd$par, approx_err = approx_err, smooth = TRUE)
-  SPF <- as.matrix(kalman_smoother(filtered_states)[,1])
+  filtered_states <- kalman_filter(y, rw_sd = est_sd$par,
+                                   approx_err = approx_err,
+                                   smooth = TRUE)
+  smoothed <- kalman_smoother(filtered_states)
+  SPF <- as.matrix(smoothed$x_smoothed[,1])
+  SPF_var <- smoothed$x_smoothed_var[1, 1, ]
 
   # Define output of this function
   colnames(SPF) <- "SPF_implied"
@@ -339,6 +359,7 @@ SPF_filter <- function(rgdp, spf, approx_err = 0.01) {
 
   Output <- list(
     SPF_filtered = SPF,
+    SPF_filtered_var = SPF_var,
     par_est      = est_par,
     logLik       = est_sd$value
   )
