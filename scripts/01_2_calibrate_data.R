@@ -82,5 +82,5 @@ for(ind in inds_q){
 
 
 
-data.table::fwrite(approx_errors,here("data", "processed", "approximation_errors_ip.csv"))
+data.table::fwrite(ipdata_all,here("data", "processed", "approximation_errors_ip.csv"))
 
