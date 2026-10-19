@@ -1,6 +1,7 @@
 source(here("R", "kalman_filter_core", "kalman_filter_us.R"))
 source(here("R", "kalman_filter_core", "kalman_filter_us_gamma.R"))
 
+
 get_rtd <- function(real_time_data,
                     current_issue,
                     current_year,
@@ -88,7 +89,8 @@ filter_dat <- function(current_quarter,
                        rtd_issue = c("latest_vintage", "rtd"),
                        rtd_shift = 0,
                        rtd_match_data,
-                       approx_err = 0.01){
+                       approx_err = 0.01,
+                       monthly = FALSE){
 
   if(length(rtd_issue) > 1){
     stop("Choose one of the available options")
@@ -105,6 +107,7 @@ filter_dat <- function(current_quarter,
                                      current_year = current_year)
 
   approx_errors <- fread(here("data", "processed", "approximation_errors.csv"))
+  approx_errors_monthly <- fread(here("data", "processed", "approximation_errors_ip.csv"))
   ###read in real time data
   #currently implemented: expanding window (use all historic data)
   #could also implement a rolling window approach
@@ -149,6 +152,17 @@ filter_dat <- function(current_quarter,
 
       approx_err_fh <- cissue_approx_errors$sigma_qonq_err[max_ind]
 
+      if(monthly){
+        cissue_approx_err_monthly <- approx_errors_monthly |>
+          DT(target_year == lubridate::year(current_issue) & target_quarter == lubridate::quarter(current_issue))
+
+        if(nrow(cissue_approx_err_monthly) == 0){
+          stop("no approx error available at monthly frequency")
+        }
+
+        approx_err_quarterly<- cissue_approx_err_monthly$sigma_err
+      }
+
   } else {
     # Could be an input to the function
     approx_err_fh <- approx_err
@@ -175,16 +189,49 @@ filter_dat <- function(current_quarter,
     spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
 
   } else {
-    cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc, approx_err = approx_err)
-    spf_filter_vals_cy <- cyres$SPF_filtered
-    cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc, approx_err = approx_err)
-    spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+    if(monthly){
+      cyres <- SPF_filter_monthly(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc,
+                                  approx_err = approx_err, approx_err_quarterly = approx_err_quarterly)
+      spf_filter_vals_cy <- cyres$SPF_filtered
+      cyandnyres <- SPF_filter_monthly(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc,
+                                       approx_err = approx_err, approx_err_quarterly = approx_err_quarterly)
+      spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+    } else {
+
+      cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc,
+                          approx_err = approx_err)
+      spf_filter_vals_cy <- cyres$SPF_filtered
+      cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc,
+                               approx_err = approx_err)
+      spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+    }
   }
 
   #make spf_filter_dat (take target columns from data_filter_cyandny)
+  if(monthly){
+
+    setorder(data_filter_cyandny, target_year, target_quarter)
+    data_filter_cyandny <- data_filter_cyandny[, target_month := target_quarter * 3L]
+    start <- data_filter_cyandny[1, target_year * 12 + (target_quarter - 1L) * 3L + 1L]
+    end   <- data_filter_cyandny[.N, target_year * 12 + target_month]
+
+    grid <- CJ(target_year  = unique(data_filter_cyandny$target_year),
+               target_month = 1:12)
+    grid <- grid[between(target_year * 12 + target_month, start, end)]
+
+    data_filter_cyandny <- data_filter_cyandny[grid, on = .(target_year, target_month)]
+    data_filter_cyandny<- data_filter_cyandny[, target_quarter := (target_month - 1L) %/% 3L + 1L]
+    setcolorder(data_filter_cyandny, c("target_year", "target_month", "target_quarter"))
+
+    repc <- 12
+    sdcols <- c("target_month", "target_year")
+  } else {
+    repc <- 4
+    sdcols <- c("target_quarter", "target_year")
+  }
   spf_filter_dat <- data_filter_cyandny |>
-    DT(, .SD, .SDcols = c("target_quarter", "target_year")) |>
-    DT(, spf_filter_cy := c(spf_filter_vals_cy, rep(NA, 4))) |>
+    DT(, .SD, .SDcols = sdcols) |>
+    DT(, spf_filter_cy := c(spf_filter_vals_cy, rep(NA, repc))) |>
     DT(, spf_filter_ny := spf_filter_vals_cyandny) |>
     DT(, origin_quarter := current_quarter) |>
     DT(, origin_year := current_year)
@@ -203,7 +250,8 @@ run_filter <- function(combs,
                        rtd_issue  ="latest_vintage",
                        rtd_shift,
                        rtd_match_data,
-                       approx_err){
+                       approx_err,
+                       monthly){
 
 
 
@@ -225,7 +273,8 @@ run_filter <- function(combs,
                       rtd_issue = rtd_issue,
                       rtd_shift = rtd_shift,
                       rtd_match_data = rtd_match_data,
-                      approx_err = approx_err)
+                      approx_err = approx_err,
+                      monthly = monthly)
 
 
     res_spf_filter[[i]] <- res$spf_filter_dat
@@ -281,7 +330,8 @@ run_filter_from_settings <- function(settings){
       rtd_issue = "latest_vintage",
       rtd_shift = settings$rtd_shift,
       rtd_match_data = spf_deadlines_match,
-      approx_err = settings$approx_error
+      approx_err = settings$approx_error,
+      monthly = settings$monthly
     )
   } else {
 
@@ -338,7 +388,8 @@ run_filter_from_settings <- function(settings){
           rtd_issue = "latest_vintage",
           rtd_shift = settings$rtd_shift,
           rtd_match_data = spf_deadlines_match,
-          approx_err = settings$approx_error
+          approx_err = settings$approx_error,
+          monthly = settings$monthly
         ) |>
           lapply(function(dat){
             dat |>
