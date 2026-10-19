@@ -193,20 +193,24 @@ filter_dat <- function(current_quarter,
       cyres <- SPF_filter_monthly(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc,
                                   approx_err = approx_err, approx_err_quarterly = approx_err_quarterly)
       spf_filter_vals_cy <- cyres$SPF_filtered
+      spf_filter_vars_cy <- cyres$SPF_filtered_var
       cyandnyres <- SPF_filter_monthly(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc,
                                        approx_err = approx_err, approx_err_quarterly = approx_err_quarterly)
       spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+      spf_filter_vars_cyandny <- cyandnyres$SPF_filtered_var
     } else {
 
       cyres <- SPF_filter(data_filter_cy$rgdp_growth, data_filter_cy$spf_fc,
                           approx_err = approx_err)
       spf_filter_vals_cy <- cyres$SPF_filtered
+      spf_filter_vars_cy <- cyres$SPF_filtered_var
       cyandnyres <- SPF_filter(data_filter_cyandny$rgdp_growth, data_filter_cyandny$spf_fc,
                                approx_err = approx_err)
       spf_filter_vals_cyandny <- cyandnyres$SPF_filtered
+      spf_filter_vars_cyandny <- cyandnyres$SPF_filtered_var
+
     }
   }
-
   #make spf_filter_dat (take target columns from data_filter_cyandny)
   if(monthly){
 
@@ -232,9 +236,12 @@ filter_dat <- function(current_quarter,
   spf_filter_dat <- data_filter_cyandny |>
     DT(, .SD, .SDcols = sdcols) |>
     DT(, spf_filter_cy := c(spf_filter_vals_cy, rep(NA, repc))) |>
+    DT(, spf_var_cy := c(spf_filter_vars_cy, rep(NA, repc))) |>
     DT(, spf_filter_ny := spf_filter_vals_cyandny) |>
+    DT(, spf_var_ny := spf_filter_vars_cyandny) |>
     DT(, origin_quarter := current_quarter) |>
     DT(, origin_year := current_year)
+
 
   return(list(spf_filter_dat = spf_filter_dat, ll = c(cy = cyres$logLik, cyandny = cyandnyres$logLik), params = list(cy = cyres$par_est, cyandny=cyandnyres$par_est)))
 
