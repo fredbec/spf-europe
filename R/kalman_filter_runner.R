@@ -389,8 +389,6 @@ run_filter_from_settings <- function(settings){
           SPF_data = spf_dat_indiv,
           real_time_data = real_time_data,
           SPF_fixedhorizon = SPF_fixedhorizon[[as.character(fcid)]],
-          SPF_data_US = SPF_data_US,
-          release_US_SPF = settings$release_US_SPF,
           est_gamma = settings$gamma_est,
           rtd_issue = "latest_vintage",
           rtd_shift = settings$rtd_shift,
