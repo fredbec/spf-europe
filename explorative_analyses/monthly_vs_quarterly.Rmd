@@ -1,0 +1,152 @@
+---
+title: "Compare monthly and quarterly filter results"
+author: "Friederike Becker"
+date: "2026-10-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width = 12, fig.height = 6, out.width = "100%")
+library(arrow)
+library(here)
+library(data.table)
+library(ggplot2)
+library(lubridate)
+
+DT <- `[`
+```
+
+This document compares filtered estimates of GDP growth at quarterly and monthly frequency, in two plots. The first plot shows the monthly estimates at their native frequency. The second plot aggregates them to quarterly frequency by averaging the three monthly estimates within each quarter.
+
+Each value is plotted at the end of its period: monthly values on the **last day of the month**, quarterly values and actuals on the **last day of the quarter**; tick marks on the x-axis similarly correspond to the last day of the quarter. Points mark the individual values in addition to the connecting lines, to make them easier to read. Alternating grey and white background shading separates the quarters.
+
+```{r load data, include=FALSE}
+#read in monthly data
+fm <- read_parquet(here("output", "filter_spf", "consensus_median", "003_run.parquet")) |>
+  as.data.table() |>
+  #keep only relevant columns
+  DT(, .SD, .SDcols = c("target_month", "target_year", 
+                        "origin_year", "origin_quarter", 
+                        "spf_filter_cy")) |>
+  #set target date to the end of the respective month
+  DT(, target_date := lubridate::ceiling_date(make_date(target_year, target_month, 1), "month") - days(1)) |>
+  DT(, target_quarter := ((target_month-1) %/% 3)+1) |>
+  #calculate a monthly mean
+  DT(, mean_monthly := mean(spf_filter_cy), 
+     by = c("target_year", "target_quarter", "origin_year", "origin_quarter")) |>
+  DT(, .SD, .SDcols = c("target_year", "target_quarter", "target_month", "target_date", "origin_year", "origin_quarter", "spf_filter_cy", "mean_monthly")) |>
+  setnames("spf_filter_cy", "spf_filter_monthly") |>
+  unique() |>
+  #calculate a forecast horizon
+  DT(, target_index := target_year + target_quarter/4) |>
+  DT(, origin_index := origin_year + origin_quarter/4) |>
+  DT(, horizon := (target_index - origin_index)*4) 
+  
+fq <- read_parquet(here("output", "filter_spf", "consensus_median", "001_run.parquet")) |>
+  as.data.table() |>
+  DT(, target_date := ceiling_date(
+  make_date(target_year, target_quarter * 3, 1),
+  "month"
+) - days(1)) |>
+  DT(, .SD, .SDcols = c("target_quarter", "target_year", 
+                        "target_date",
+                        "origin_year", "origin_quarter", 
+                        "spf_filter_cy")) |>
+  DT(, target_index := target_year + target_quarter/4) |>
+  DT(, origin_index := origin_year + origin_quarter/4) |>
+  DT(, horizon := (target_index - origin_index)*4) 
+
+
+fq_plot <- fq |> 
+  DT(horizon == 0)
+fm_plot <- fm |> 
+  DT(horizon == 0)
+
+
+actuals <- fread(here("data", "processed", "revdatfull.csv")) 
+setorderv(actuals, c("origin_year", "origin_month", "origin_day", "target_year", "target_quarter")) 
+
+actuals <- actuals |>
+  DT(!is.na(rgdp_growth)) |>
+  DT(, count := 1:.N, by = c("target_year", "target_quarter")) |>
+  DT(count == 1) |>
+  DT(target_year >= 2001) |>
+  DT(, target_date := ceiling_date(
+  make_date(target_year, target_quarter * 3, 1),
+  "month"
+) - days(1))
+  
+```
+
+
+### Quarterly vs. monthly estimates, Horizon 0
+
+```{r pressure, echo=FALSE}
+# quarter boundaries covering the data range
+rng      <- range(fq_plot$target_date, na.rm = TRUE)
+q_starts <- seq(floor_date(rng[1], "quarter"),
+                ceiling_date(rng[2], "quarter"),
+                by = "quarter")
+shade <- data.frame(xmin = head(q_starts, -1),
+                    xmax = tail(q_starts, -1))
+shade <- shade[quarter(shade$xmin) %in% c(1, 3), ]   # grey in Q1 and Q3
+
+
+#quarter end dates for x axis breaks 
+all_dates <- c(actuals$target_date, fq_plot$target_date, fm_plot$target_date)
+q_ends <- seq(floor_date(min(all_dates), "quarter"),
+              ceiling_date(max(all_dates), "quarter"),
+              by = "quarter")[-1] - days(1)  
+
+
+ggplot() +
+  geom_line(aes(x = target_date, y = rgdp_growth),  color = "black", data = actuals) +
+  geom_line(aes(x = target_date, y = spf_filter_cy),  color = "#0072B2", data = fq_plot)+
+  geom_point(aes(x = target_date, y = spf_filter_cy), color = "#0072B2", data = fq_plot)+
+  geom_line(aes(x = target_date, y = spf_filter_monthly),  color = "#D55E00", data = fm_plot) +
+  geom_point(aes(x = target_date, y = spf_filter_monthly), color = "#D55E00", size = 0.5, data = fm_plot)+
+  geom_rect(data = shade,
+            aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+            inherit.aes = FALSE, fill = "grey90", alpha = 0.25) +
+  scale_x_date(breaks = q_ends,
+               labels = function(x) ifelse(quarter(x) %in% c(2, 4),
+                                           paste0(year(x), " Q", quarter(x)),
+                                           "")) +
+  facet_wrap(~horizon) +
+  theme_minimal() +
+  ylab("Growth") + 
+  xlab("") +
+  theme(axis.ticks.x = element_line(),
+        axis.text.x  = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+### Quarterly vs. quarterly average of monthly estimates, Horizon 0
+
+```{r, echo=FALSE}
+fm_plot <- fm |>
+  DT(target_month %in% c(3,6,9,12))|> 
+  DT(horizon == 0)
+
+ggplot() +
+  geom_line(aes(x = target_date, y = rgdp_growth),  color = "black", data = actuals) +
+  geom_line(aes(x = target_date, y = spf_filter_cy), color = "#0072B2", data = fq_plot)+
+  geom_point(aes(x = target_date, y = spf_filter_cy), color = "#0072B2", data = fq_plot)+
+  geom_line(aes(x = target_date, y = mean_monthly), color = "#B2182B", data = fm_plot) +
+  geom_point(aes(x = target_date, y = mean_monthly), color = "#B2182B", size = 0.5, data = fm_plot)+
+  geom_rect(data = shade,
+            aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+            inherit.aes = FALSE, fill = "grey90", alpha = 0.25) +
+  scale_x_date(breaks = q_ends,
+               labels = function(x) ifelse(quarter(x) %in% c(2, 4),
+                                           paste0(year(x), " Q", quarter(x)),
+                                           "")) +
+  facet_wrap(~horizon) +
+  theme_minimal() +
+  ylab("Growth") + 
+  xlab("") +
+  theme(axis.ticks.x = element_line(),
+        axis.text.x  = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+```
+
