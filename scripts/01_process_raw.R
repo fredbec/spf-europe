@@ -1,6 +1,8 @@
 library(here)
 library(data.table)
 
+source(here("R", "utils.R"))
+
 #chain operator for data.table
 DT <- `[`
 
@@ -182,7 +184,7 @@ process_rtd <- function() {
 process_rtd()
 
 
-process_spf <- function() {
+process_spf <- function(target = "gdp") {
 
   #chain operator for data.table
   DT <- `[`
@@ -234,16 +236,38 @@ process_spf <- function() {
                                   skip = 1,
                                   header = TRUE)
 
-    startrow <- which(spf_curr$TARGET_PERIOD == "GROWTH EXPECTATIONS; YEAR-ON-YEAR CHANGE IN REAL GDP")
-    names(spf_curr) <- unlist(spf_curr[startrow + 1,])
-    spf_curr <- spf_curr[(startrow+2):2000,]
-    endrow <- which(spf_curr$TARGET_PERIOD == "EXPECTED UNEMPLOYMENT RATE; PERCENTAGE OF LABOUR FORCE")
-    if(length(endrow)>0){ #after ~2015, unemployment rate is not in data anymore
+    if(target == "gdp"){
+
+      startrow <- which(spf_curr$TARGET_PERIOD == "GROWTH EXPECTATIONS; YEAR-ON-YEAR CHANGE IN REAL GDP")
+      names(spf_curr) <- unlist(spf_curr[startrow + 1,])
+      spf_curr <- spf_curr[(startrow+2):nrow(spf_curr),]
+      endrow <- which(spf_curr$TARGET_PERIOD == "EXPECTED UNEMPLOYMENT RATE; PERCENTAGE OF LABOUR FORCE")
+      spf_curr <- spf_curr[1:(endrow-2),]
+    } else if(target == "cpi"){
+      startrow <- 1
+      spf_curr <- spf_curr[1:nrow(spf_curr),]
+      endrow <- which(spf_curr$TARGET_PERIOD == "CORE INFLATION EXPECTATIONS; YEAR-ON-YEAR CHANGE IN CORE")
+      spf_curr <- spf_curr[1:(endrow-2),]
+      #remove empty trailing end columns (only happen for inflation due to the header being read in as names)
+      spf_curr <- spf_curr[ ,.SD, .SDcols = !patterns("^V\\d+$")]
+    } else if(target == "unemployment"){
+      startrow <- which(spf_curr$TARGET_PERIOD == "EXPECTED UNEMPLOYMENT RATE; PERCENTAGE OF LABOUR FORCE")
+      names(spf_curr) <- unlist(spf_curr[startrow + 1,])
+      spf_curr <- spf_curr[(startrow+2):nrow(spf_curr),]
+      endrow <- which(spf_curr$TARGET_PERIOD == "ASSUMPTIONS")
       spf_curr <- spf_curr[1:(endrow-2),]
     }
+
+    #if(length(endrow)>0){ #after ~2015, unemployment rate is not in data anymore
+    #  browser()
+    #  spf_curr <- spf_curr[1:(endrow-2),]
+    #} else {
+    #  message("problem?")
+    #}
     #delete empty column
     nmtodel <- names(spf_curr) == ""
     spf_curr[, which(nmtodel)] <- NULL
+
 
     spf_long <- spf_curr |>
       setnames("TARGET_PERIOD", "target_id") |>
@@ -251,14 +275,16 @@ process_spf <- function() {
       melt(id.vars = c("target_id", "forecaster_id"),
            variable.name = "type_format",
            value.name = "prediction") |>
-      DT(, type_target := ifelse(grepl("Q", target_id), "quarterly", "annual")) |>
+      DT(, type_target := ifelse(grepl("[[:alpha:]]", target_id), "monthly", "annual")) |>
+      DT(type_target == "monthly", type_target := ifelse(grepl("Q", target_id), "quarterly", "monthly")) |>
       DT(, target_year := as.numeric(substr(target_id, 1, 4))) |>
-      DT(, target_quarter := as.numeric(substr(target_id, 6, 6))) |>
+      DT(type_target == "quarterly", target_quarter := as.numeric(substr(target_id, 6, 6))) |>
+      DT(type_target == "monthly", target_month := month_to_num(substr(target_id, 5, 12))) |>
       DT(, target_id := ifelse(type_target == "annual", paste0(target_id, "A"), target_id)) |>
       DT(, forecast_year := yrnum) |>
       DT(, forecast_quarter := qnum) |>
       DT(, .SD, .SDcols = c("forecaster_id", "forecast_year", "forecast_quarter",
-                            "target_id", "target_year", "target_quarter",
+                            "target_id", "target_year", "target_quarter", "target_month",
                             "type_target", "type_format", "prediction")) |>
       DT(, prediction := as.numeric(prediction))
 
@@ -269,14 +295,22 @@ process_spf <- function() {
   alldata <- rbindlist(alldata) |>
     DT(,reldate := paste0(forecast_year, "Q", forecast_quarter))
 
+  quarter_sdcols <-  c("forecaster_id", "forecast_year", "forecast_quarter",
+                    "target_id", "target_year", "target_quarter",
+                    "type_target", "type_format",
+                    "release_deadline", "release_publication", "prediction")
+  month_sdcols <- replace(quarter_sdcols, quarter_sdcols == "target_quarter", "target_month")
+
+  sdcols <- if(target == "gdp") quarter_sdcols else month_sdcols
+
   #merge data with release dates
   alldata <- reldates[alldata, on = "reldate"] |>
-    DT(, .SD, .SDcols = c("forecaster_id", "forecast_year", "forecast_quarter",
-                          "target_id", "target_year", "target_quarter",
-                          "type_target", "type_format",
-                          "release_deadline", "release_publication", "prediction"))
+    DT(, .SD, .SDcols = sdcols)
 
-  data.table::fwrite(alldata, here("data", "processed", "spf_consolidated.csv"))
+
+  tgtname <- ifelse(target == "gdp", "", paste0("_", target))
+
+  data.table::fwrite(alldata, here("data", "processed", paste0("spf_consolidated", tgtname, ".csv")))
 
   #individual forecasts
   spfdat_individual <- alldata |>
@@ -298,21 +332,29 @@ process_spf <- function() {
                           "forecast_quarter",
                           "ens_fc"))
 
+  quarter_sdcols <-  c("forecaster_id",
+                       "target_year",
+                       "target_quarter",
+                       "forecast_year",
+                       "forecast_quarter",
+                       "ens_fc",
+                       "type_target")
+  month_sdcols <- replace(quarter_sdcols, quarter_sdcols == "target_quarter", "target_month")
+
+  sdcols <- if(target == "gdp") quarter_sdcols else month_sdcols
+
+
   spfdat_individual_annualandquarterly <- spfdat_individual |>
     copy() |>
     DT(, fc_inst := forecast_year + 0.25*(forecast_quarter-1)) |>
-    DT(, tg_inst := target_year + 0.25*(target_quarter-1)) |>
-    DT(type_target == "quarterly", horizon := tg_inst - fc_inst) |>
-    DT(is.na(horizon) | horizon == 0.5) |>
+    add_missing_cols(c("target_quarter", "target_month")) |>
+    DT(!is.na(target_quarter), tg_inst := target_year + 0.25*(target_quarter-1)) |>
+    DT(!is.na(target_month), tg_inst := target_year + (1/12)*(target_month-1)) |>
+    DT(type_target %in% c("quarterly", "monthly"), horizon := tg_inst - fc_inst) |>
+    DT(type_target == "annual" | horizon < 1) |> #filter out only values within current year (or annual, which have horizon as NA)
     DT(, count := .N, by = c("forecast_year", "forecast_quarter", "forecaster_id")) |>
     DT(count == 3)  |> #only keep instances with all 3 forecast (annual c, annual n, quarterly)
-    DT(, .SD, .SDcols = c("forecaster_id",
-                          "target_year",
-                          "target_quarter",
-                          "forecast_year",
-                          "forecast_quarter",
-                          "ens_fc",
-                          "type_target"))
+    DT(, .SD, .SDcols = sdcols)
 
 
 
@@ -349,55 +391,62 @@ process_spf <- function() {
     unique()
 
 
+  quarter_avgcols <-  c("target_year",
+                       "target_quarter",
+                       "forecast_year",
+                       "forecast_quarter")
+  month_avgcols <- replace(quarter_avgcols, quarter_avgcols == "target_quarter", "target_month")
+
+  avgcols <- if(target == "gdp") quarter_avgcols else month_avgcols
+  sdcols <- c(avgcols, "ens_fc")
+
   #compute median quarterly forecasts
   spfdat_qu_median <- alldata |>
     copy() |>
-    DT(type_target == "quarterly" & type_format == "POINT") |>
+    DT(type_target %in% c("monthly", "quarterly") & type_format == "POINT") |>
     DT(, fc_inst := forecast_year + 0.25*(forecast_quarter-1)) |>
-    DT(, tg_inst := target_year + 0.25*(target_quarter-1)) |>
+    add_missing_cols(c("target_quarter", "target_month")) |>
+    DT(!is.na(target_quarter), tg_inst := target_year + 0.25*(target_quarter-1)) |>
+    DT(!is.na(target_month), tg_inst := target_year + (1/12)*(target_month-1)) |>
     DT(, horizon := tg_inst - fc_inst) |>
-    DT(horizon == 0.5) |>
+    DT(horizon < 1) |>
     DT(!is.na(prediction)) |>
-    DT(, ens_fc := median(prediction), by = c("target_year",
-                                              "target_quarter",
-                                              "forecast_year",
-                                              "forecast_quarter")) |>
-    DT(, .SD, .SDcols = c("target_year",
-                          "target_quarter",
-                          "forecast_year",
-                          "forecast_quarter",
-                          "ens_fc")) |>
+    DT(, ens_fc := median(prediction), by = avgcols) |>
+    DT(, .SD, .SDcols = sdcols) |>
     unique()
 
   spfdat_qu_mean <- alldata |>
     copy() |>
-    DT(type_target == "quarterly" & type_format == "POINT") |>
+    DT(type_target %in% c("monthly", "quarterly") & type_format == "POINT") |>
     DT(, fc_inst := forecast_year + 0.25*(forecast_quarter-1)) |>
-    DT(, tg_inst := target_year + 0.25*(target_quarter-1)) |>
+    add_missing_cols(c("target_quarter", "target_month")) |>
+    DT(!is.na(target_quarter), tg_inst := target_year + 0.25*(target_quarter-1)) |>
+    DT(!is.na(target_month), tg_inst := target_year + (1/12)*(target_month-1)) |>
     DT(, horizon := tg_inst - fc_inst) |>
-    DT(horizon == 0.5) |>
+    DT(horizon < 1) |>
     DT(!is.na(prediction)) |>
-    DT(, ens_fc := mean(prediction), by = c("target_year",
-                                              "target_quarter",
-                                              "forecast_year",
-                                              "forecast_quarter")) |>
-    DT(, .SD, .SDcols = c("target_year",
-                          "target_quarter",
-                          "forecast_year",
-                          "forecast_quarter",
-                          "ens_fc")) |>
+    DT(, ens_fc := mean(prediction), by = avgcols) |>
+    DT(, .SD, .SDcols = sdcols) |>
     unique()
 
 
-  data.table::fwrite(spfdat_individual_annual, here("data", "processed", "spf_individual_annual.csv"))
-  data.table::fwrite(spfdat_individual_annualandquarterly, here("data", "processed", "spf_individual_annualandquarterly.csv"))
-  data.table::fwrite(spfdat_median, here("data", "processed", "spf_median_forecast.csv"))
-  data.table::fwrite(spfdat_mean, here("data", "processed", "spf_mean_forecast.csv"))
-  data.table::fwrite(spfdat_qu_median, here("data", "processed", "spf_median_quarterly_forecast.csv"))
-  data.table::fwrite(spfdat_qu_mean, here("data", "processed", "spf_mean_quarterly_forecast.csv"))
+  data.table::fwrite(spfdat_individual_annual,
+                     here("data", "processed", paste0("spf_individual_annual", tgtname, ".csv")))
+  data.table::fwrite(spfdat_individual_annualandquarterly,
+                     here("data", "processed", paste0("spf_individual_annualandquarterly", tgtname, ".csv")))
+  data.table::fwrite(spfdat_median,
+                     here("data", "processed", paste0("spf_median_forecast", tgtname, ".csv")))
+  data.table::fwrite(spfdat_mean,
+                     here("data", "processed", paste0("spf_mean_forecast", tgtname, ".csv")))
+  data.table::fwrite(spfdat_qu_median,
+                     here("data", "processed", paste0("spf_median_quarterly_forecast", tgtname, ".csv")))
+  data.table::fwrite(spfdat_qu_mean,
+                     here("data", "processed", paste0("spf_mean_quarterly_forecast", tgtname, ".csv")))
 }
 
-process_spf()
+process_spf("gdp")
+process_spf("cpi")
+process_spf("unemployment")
 
 
 process_usspf <- function(){
